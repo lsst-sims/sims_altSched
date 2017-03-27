@@ -245,7 +245,7 @@ class GraphicalMonitor:
         # figure out which chip these pupil coords lie on
         pupilCoords = np.vstack([xPupil, yPupil]).T
 
-        def arePixCovered(pupilCoords):
+        def arePixCovered(x, y):
             # this code ignores the gaps between rafts and chips
 
             # I found these by evaluating chilNameFromPupilCoords many times
@@ -265,7 +265,8 @@ class GraphicalMonitor:
                      (x > -edge + raftWidth) & (x < edge - raftWidth)))
 
         
-        coveredPixIds = candidatePixIds[arePixCovered(pupilCoords)]
+        coveredPixIds = candidatePixIds[arePixCovered(pupilCoords[:,0],
+                                                      pupilCoords[:,1])]
         if self.useVisitQueue:
             self.visitQueue.append(coveredPixIds)
         else:
