@@ -18,25 +18,12 @@ import Utils
 import AstronomicalSky
 import Config
 
-#from lsst.sims.coordUtils import _chipNameFromRaDec
-#from lsst.sims.coordUtils import chipNameFromPupilCoords
-#from lsst.sims.utils import ObservationMetaData
-#from lsst.obs.lsstSim import LsstSimMapper
 
 import palpy
 
 import pygame
 from matplotlib.colors import hsv_to_rgb
 
-# get the LSST camera so we can figure out which pixels are covered
-# by the camera's sensors
-#mapper = LsstSimMapper()
-#camera = mapper.camera
-
-def workerWrapper(pupilCoords):
-    return chipNameFromPupilCoords(pupilCoords[:,0], 
-                                   pupilCoords[:,1], 
-                                   camera = camera)
 
 class GraphicalMonitor:
 
@@ -51,8 +38,6 @@ class GraphicalMonitor:
         # * multiply dec by -1 so higher dec => higher in the img, not lower
         # * center the result 
         
-        #shifted = radec
-        #shifted[:,0] -= self.ra0
         shifted = radec
         rawPix = self.w.wcs_world2pix(np.degrees(shifted),0)
         imdataPix = rawPix * self.imScale
@@ -127,15 +112,6 @@ class GraphicalMonitor:
         self.skyPix = self.w.wcs_pix2world(projPixReversed / imScale, 0)
         self.skyPix = np.radians(self.skyPix)
 
-        """
-        # figure out where the zenith is
-        zenithDec = Telescope.latitude 
-        zenithImdata = self.radec2imdata(np.array([[0, zenithDec]]))[0]
-        zenithWorld = np.degrees(np.array([[0,zenithDec]]))
-        zenithPix = w.wcs_world2pix(zenithWorld,1)
-        zenithPix = self.worldPix2Imdata(zenithPix)
-        """
-
         # calculate ra_0: the ra of the zenith at Config.surveyStartTime
         # this is used to make the zenith centered in the displayed image
         self.ra0 = AstronomicalSky.altaz2radec(np.array([[np.pi/2, 0]]),
@@ -159,30 +135,12 @@ class GraphicalMonitor:
         airmassContourAlt = np.ones(airmassContourAz.shape) * np.arcsin(1 / nAirmass) 
         airmassContourAltaz = np.vstack([airmassContourAlt, airmassContourAz]).T
         self.airmassContour = self.altaz2imdata(airmassContourAltaz)
-        """
-        twoAirmassRaDec = AstronomicalSky.altaz2radec(twoAirmassAltaz
-                                                      Config.surveyStartTime - 6.6 * 3600)
-        #print "radec", twoAirmassRaDec
-        twoAirmassWorld = np.vstack([twoAirmassRaDec[0], twoAirmassRaDec[1]]).T
-        twoAirmassPix = w.wcs_world2pix(np.degrees(twoAirmassWorld),0)
-        self.twoAirmassContour = self.worldPix2Imdata(twoAirmassPix)
-        #print "twoAirmassContour", self.twoAirmassContour
-        """
-
-        """
-        zenithCircleRadius = 5
-        alpha = np.linspace(0,2 * np.pi, num=50)
-        unitCircle = np.vstack([np.cos(alpha), np.sin(alpha)])
-        self.zenithCircle = (zenithCircleRadius * unitCircle.T).astype(int)
-        self.zenithCircle += zenithPix
-        """
-
-        # calculate a contour in imdata reprezenting the zenith avoidance zone
+        
+        # calculate a contour in imdata representing the zenith avoidance zone
         zenithAvoidAz = np.linspace(0, 2 * np.pi, num = 100)
         zenithAvoidAlt = Telescope.maxAlt * np.ones(zenithAvoidAz.shape)
         zenithAvoidAltaz = np.vstack([zenithAvoidAlt, zenithAvoidAz]).T
         self.zenithAvoidContour = self.altaz2imdata(zenithAvoidAltaz)
-
 
         # take out pixels that are in the projection rectangle but
         # don't actually represent places on the sky (i.e. pixels in the corners)
@@ -207,32 +165,8 @@ class GraphicalMonitor:
         # keep track of how long each row of pixels is in the mollweide
         self.rowLengths = {y: (projPix[:,0] == y).sum() 
                            for y in range(self.yMin, self.yMax)}
-
-        #self.p = Pool(8)
         
-        """ for matplotlib
-        # turn on interactive mode
-        plt.ion()
-        fig, ax = plt.subplots(figsize=(24,12))
-
-        #ax.set_xlim(0, xMax - xMin)
-        #ax.set_ylim(0, yMax - yMin)
-
-        # show zeros to start with (we'll dynamically update it later)
-        fillerImData = np.zeros((self.yMax - self.yMin, self.xMax - self.xMin))
-        cmap = matplotlib.cm.jet
-        cmap.set_bad("black",alpha=1)
-        self.image = ax.imshow(fillerImData, vmin=0, cmap=cmap)
-        plt.colorbar(self.image, shrink=0.6)
-        plt.tight_layout()
-
-        # fig.canvas.draw() works for most backends but isn't supported
-        # in the one I'm using, so I need to use plt.pause() instead
-        plt.pause(0.001)
-        #fig.canvas.draw()
-        """
-        
-        # create a lookup table for hsv=>packed color int since hsv_to_rgb is slow
+        # create a lookup table for hsv=>packed color int since hsv_to_rgb is "slow"
         hue = np.linspace(0,1,num=256)
         sat = np.ones(hue.shape)
         val = np.ones(hue.shape)
@@ -244,16 +178,7 @@ class GraphicalMonitor:
                                                self.yMax - self.yMin))
 
 
-    def __del__(self):
-        #self.p.close()
-            #self.p.join()
-        pass
-
     def addVisit(self, visit):
-        #obsMetaData = ObservationMetaData(pointingRA = np.degrees(visit.ra),
-        #                                  pointingDec = np.degrees(visit.dec),
-        #                                  rotSkyPos = np.degrees(visit.rotation),
-        #                                  mjd = Utils.mjd(self.context.time()))
         # edgeOfFov should be the radius of a circle that includes all of the fov
         edgeOfFov = Utils.spherical2Cartesian(0, 1.5 * Telescope.fovWidth / 2)
         r = np.linalg.norm(np.array([1,0,0]) - np.array(edgeOfFov))
@@ -274,7 +199,25 @@ class GraphicalMonitor:
         _pupilCoordsFromRaDec which first converts from ICRS ra/dec to 
         observed ra/dec which is all well and good except that it's 
         painfully slow (6ms/pixel). So instead I just do what 
-        _pupilCoordsFromRaDec does but cut the conversion
+        _pupilCoordsFromRaDec does but cut the conversion.
+
+        Even once I've calculated the pupil coords, calling 
+        lsst.sims.coordUtils.chipNameFromPupilCoords() is also 
+        incredibly slow (was ~3/4 of my run time at one point), so I 
+        have to reimplement that too in arePixCovered() below
+
+
+        from lsst.sims.coordUtils import _chipNameFromRaDec
+        from lsst.sims.utils import ObservationMetaData
+
+        from lsst.obs.lsstSim import LsstSimMapper
+        mapper = LsstSimMapper()
+        camera = mapper.camera
+
+        obsMetaData = ObservationMetaData(pointingRA = np.degrees(visit.ra),
+                                          pointingDec = np.degrees(visit.dec),
+                                          rotSkyPos = np.degrees(visit.rotation),
+                                          mjd = Utils.mjd(self.context.time()))
 
         chipNames = _chipNameFromRaDec(skyPix[candidatePixIds,0],
                                        skyPix[candidatePixIds,1],
@@ -303,20 +246,7 @@ class GraphicalMonitor:
         pupilCoords = np.vstack([xPupil, yPupil]).T
 
         def arePixCovered(pupilCoords):
-            """ This is veeeery slow (~3/4 of the runtime of the entire program)
-            chipNames = self.p.map(workerWrapper, np.array_split(pupilCoords, 8)) 
-            chipNames = np.hstack(chipNames)
-            chipNames = chipNameFromPupilCoords(xPupil, 
-                                                yPupil, 
-                                                camera = camera)
-
-            # chipNameFromPupilCoords returns None if the pixel does not fall
-            # on one of the camera sensors
-            return np.where(~np.equal(chipNames, None))[0]
-            """
-
-            # instead, this pretty close to what the above code would return
-            # but ignores the gaps between rafts and chips
+            # this code ignores the gaps between rafts and chips
 
             # I found these by evaluating chilNameFromPupilCoords many times
             # please ignore the number of sig figs (no idea if my testing
@@ -409,29 +339,8 @@ class GraphicalMonitor:
 
         imdata /= np.max(self.pixValues)
 
-        # values chosen so we go from blue to red
-        hue = (240 - imdata * 240) / 360
-
-        """ this does the hsv conversion manually instead of using the lookup
-        # we want hsv to have shape (x, y, 3)
-        hsv = np.array([hue, np.ones(hue.shape), np.ones(hue.shape)]).transpose([2,1,0])
-
-        # hsv_to_rgb is slow, so initialize rgb to blue and only compute the
-        # rgb value for pixels that have been visited at least once
-        # going to this trouble gave a ~2x speedup when hsv_to_rgb was 50% of the
-        # overall compute time
-        rgb = np.array([np.zeros(hue.shape), 
-                        np.zeros(hue.shape), 
-                        np.ones(hue.shape)*255]).transpose([2,1,0]).astype(int)
-
-        # hsv[:,:,0] < 2/3 are the pixels with hue higher than 240/360=2/3, which
-        # are the pixels that have been visited more than zero times
-        rgb[hsv[:,:,0] < 2/3] = (hsv_to_rgb(hsv[hsv[:,:,0] < 2/3]) * 255).astype(int)
-
-        # the values of imdata are ints packed with the r, g, and b channels
-        imdata = (rgb[:,:,0] << 16) + (rgb[:,:,1] << 8) + rgb[:,:,2]
-        """
-        hue = (hue * 255).astype(int).transpose()
+        # 240/360 was chosen so we go from blue to red
+        hue = (((240 - imdata * 240) / 360) * 255).astype(int).transpose()
         imdata = self.packedColorLookup[hue]
 
         # draw a line down the middle to represent the meridian
@@ -449,209 +358,9 @@ class GraphicalMonitor:
         pygame.surfarray.blit_array(self.screen, imdata)
         pygame.display.flip()
         
-        """ using matplotlib (which got ~4 frames/sec; pygame gets ~20 w/ imScale=2) 
-        (also set contours to np.NaN not zero)
-        # update the plotted image and colorbar
-        self.image.set_data(imdata)
-        self.image.set_clim(vmax=np.max(self.pixValues))
-
-        plt.pause(0.001)
-        #fig.canvas.draw()
-        """
 
     def saveFrame(self, filename):
+        # save the current frame to disk
 	pygame.image.save(self.screen, filename)
-
-
-
-    #########################################################
-    ## The methods below here are not used since I learned ##
-    ## about _getChipNames or whatever it's called.        ##
-    ## They could serve as an alternate potentially faster ##
-    ## method though if the bugs were worked out.          ##
-    #########################################################
-    def getIncludedPixels(visit):
-        ra = visit.ra
-        dec = visit.dec
-        rot = visit.rotation
-        
-
-        """
-             ___________
-            |           |
-         ___|           |___
-        |                   |
-        |                   |
-        |    o       i      |
-        ||-------|C|----|   |
-        |                   |
-        |                   |
-         ---             ---
-            |           |
-            |___________|
-
-        """
-        
-        o = Telescope.fovWidth / 2
-        i = Telescope.fovWidth * (3 / 5) / 2
-
-        # these corners are [ra, dec] in radians
-        bigSquare = np.array([
-                       [ o,  o],
-                       [ o, -o],
-                       [-o, -o],
-                       [-o,  o]
-                    ])
-
-        littleSquares = [
-                np.array([[ o,  o], [ o,  i], [ i,  i], [ i,  o]]),
-                np.array([[ o, -i], [ o, -o], [ i, -o], [ i, -i]]),
-                np.array([[-i, -i], [-i, -o], [-o, -o], [-o, -i]]),
-                np.array([[-i,  o], [-i,  i], [-o,  i], [-o,  o]]),
-        ]
-
-        allSquares = [bigSquare] + littleSquares
-
-        # convert corners to [x, y, z]
-        allSquares = [np.apply_along_axis(spherical2Cartesian, 1, square)
-                      for square in allSquares]
-
-        # rotate the FOV so it is centered on the visit (ra, dec)
-        raAxis = np.array([0, 0, 1])
-        allSquares = [np.array([rotate(corner, raAxis, ra) for corner in square])
-                      for square in allSquares]
-
-        decAxis = cross(spherical2Cartesian([ra, dec]), raAxis)
-        allSquares = [np.array([rotate(corner, decAxis, dec) for corner in square])
-                      for square in allSquares]
-
-        # rotate the FOV about its center by visit.rotation
-        rotAxis = spherical2Cartesian([ra, dec])
-        allSquares = [np.array([rotate(corner, rotAxis, rot) for corner in square])
-                      for square in allSquares]
-
-        # convert back to (phi, theta)
-        allSquares = [np.apply_along_axis(cartesian2Spherical, 1, square)
-                      for square in allSquares]
-        # project the corners using our existing wcs object
-        # this returns [x,y] so we have to slice it with [:,[1,0]] to get [y,x]
-        allSquares = [w.wcs_world2pix(square * RAD2DEG, 1)[:,[1,0]] * imScale
-                      for square in allSquares]
-
-
-        # generate candidate pixels which might fall in each square
-        candidatePix = [getCandidatePix(square) for square in allSquares]
-
-        # figure out which pixels are in each square
-        includedPix = [[pix for pix in candidatePix[i] 
-                        if isPixInSquare(pix, allSquares[i])]
-                       for i in range(len(allSquares))]
-
-        # store the included pixels in a set as tuples so we can do intersections
-        includedPix = [set([tuple(pix) for pix in includedPix[i]])
-                       for i in range(len(allSquares))]
-
-        #print isPixInSquare([0,0],np.array([[1,1],[-1,1],[-1,-1],[1,-1]]))
-
-        # return every pixel inside bigSquare that is in none of the little squares
-        pixInLittleSquares = includedPix[1] | includedPix[2] | \
-                             includedPix[3] | includedPix[4]
-
-        #return pixInLittleSquares
-        return includedPix[0] - pixInLittleSquares
-        
-
-    def getCandidatePix(corners):
-        ys = corners[:,0]
-        xs = corners[:,1]
-
-        candidateXs = np.arange(round(min(xs)), round(max(xs)))
-        candidateYs = np.arange(round(min(ys)), round(max(ys)))
-
-        candidatePix = [[y, x] for x in candidateXs for y in candidateYs]
-        return np.array(candidatePix)
-
-    def rotate(v, axis, theta):
-        """
-        Code taken from user "unutbu"'s answer on stackoverflow: 
-        """
-        def rotation_matrix(axis, theta):
-            """
-            Return the rotation matrix associated with counterclockwise rotation about
-            the given axis by theta radians.
-            """
-            axis = np.asarray(axis)
-            theta = np.asarray(theta)
-            axis = axis/np.sqrt(np.dot(axis, axis))
-            a = np.cos(theta/2.0)
-            b, c, d = -axis*np.sin(theta/2.0)
-            aa, bb, cc, dd = a*a, b*b, c*c, d*d
-            bc, ad, ac, ab, bd, cd = b*c, a*d, a*c, a*b, b*d, c*d
-            return np.array([[aa+bb-cc-dd, 2*(bc+ad), 2*(bd-ac)],
-                             [2*(bc-ad), aa+cc-bb-dd, 2*(cd+ab)],
-                             [2*(bd+ac), 2*(cd-ab), aa+dd-bb-cc]])
-
-        #def M(axis, theta):
-        #	return expm3(cross(eye(3), axis/norm(axis)*theta))
-
-        return dot(rotation_matrix(axis, theta), v)
-
-    def isPixInSquare(point, square):
-        """
-        Crossing algorithm: run a semi-infinite array along the +x
-        axis ending at pix and see how many times it crosses an edge
-        of square. 
-
-        Algorithm adapted from 
-        http://www.realtimerendering.com/resources/GraphicsGems//gemsiv/ptpoly_haines/ptinpoly.c
-
-        """
-
-        # we're done once two edges have crossed the point's y coordinate
-        # since a square (or any convex polygon) can only have that happen twice
-        anyYCrossingsYet = False
-
-        # every time the ray crosses an edge we negate this
-        isInside = False
-
-        # make indices more legible
-        Y = 0
-        X = 1
-
-        for i in range(-1, len(square) - 1):
-            # consider the square's edge joining vtx0 and vtx1
-            vtx0 = square[i]
-            vtx1 = square[i + 1]
-
-            isY0AbovePoint = vtx0[Y] >= point[Y]
-            isY1AbovePoint = vtx1[Y] >= point[Y]
-
-            # only continue if the edge does not lie entirely
-            # above or below point
-            isPointBetweenYs = isY0AbovePoint != isY1AbovePoint
-            if isPointBetweenYs:
-                isX0RightOfPoint = vtx0[X] >= point[X]
-                isX1RightOfPoint = vtx1[X] >= point[X]
-                if isX0RightOfPoint == isX1RightOfPoint:
-                    # if the edge lies entirely to the left or right of point
-                    # then it intersects the ray exactly when it lies entirely
-                    # to the right
-                    if isX0RightOfPoint:
-                        isInside = not isInside
-                else:
-                    # if the edge does not lie entirely to the left or right
-                    # of point, we have to figure out whether the edge's
-                    # intersection with the x axis lies to the left or right
-                    # of point
-                    xAxisIntersection = vtx1[X] - (vtx1[Y] - point[Y]) * \
-                                        (vtx0[X] - vtx1[X]) / (vtx0[Y] - vtx1[Y])
-                    if xAxisIntersection >= point[X]:
-                        isInside = not isInside
-
-                if anyYCrossingsYet:
-                    return isInside
-                anyYCrossingsYet = True
-
-        return isInside
 
 
