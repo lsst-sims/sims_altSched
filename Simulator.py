@@ -58,7 +58,7 @@ class Simulator:
                     display.updateDisplay()
                     #plt.savefig("images/pernight/%04d.png" % nightNum)
                     if saveMovie:
-                        display.saveFrame("images/pygame/%05d.png" % (i / dispUpdateFreq)
+                        display.saveFrame("images/pygame/%05d.png" % (i / dispUpdateFreq))
 
             if i % 10000 == 0:
                 print i

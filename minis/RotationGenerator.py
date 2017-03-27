@@ -28,7 +28,6 @@ class RotationGenerator:
         increment = np.pi / 10
  
         while True:
-            yield self.value
             if self.direction == 1:
                 # we've been going up
                 if self.value + increment <= maximum:
@@ -45,6 +44,7 @@ class RotationGenerator:
                     self.value -= increment
                 else:
                     # turn around
-                    value += increment
+                    self.value += increment
                     self.direction = 1
+            yield self.value
 
