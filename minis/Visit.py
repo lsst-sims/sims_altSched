@@ -11,7 +11,7 @@ class VisitPair:
         self.visit1 = Visit(self, ra, dec, miniSurvey.rotation, -1)
         self.visit2 = Visit(self, ra, dec, miniSurvey.rotation, -1)
 
-    def __str__(self):
+    def __repr__(self):
         return "RA: " + str(self.ra) + ", DEC: " + str(self.dec)
 
 class Visit:
@@ -27,7 +27,7 @@ class Visit:
         self.isComplete = False
         self.timeOfCompletion = 0
 
-    def __str__(self):
+    def __repr__(self):
         return "RA: " + str(self.ra) + ", DEC: " + str(self.dec) + \
                 ", rot: " + str(self.rotation) + ", expTime: " + \
                 str(self.expTime) + ", isComplete?: " + str(self.isComplete)
