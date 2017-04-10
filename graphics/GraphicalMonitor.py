@@ -232,12 +232,17 @@ class GraphicalMonitor:
 
         # calculate the pupil coordinates x, y of the obsMetaData
         # i.e. project candidateSkyPix onto the plane tangent to the unit
-        # sphere at point (visit.ra, visit.dec)
-        # TODO you could probably get away with not even calling this
-        # method for points near the equator given the whole small angle
-        # approximation thing
-        x, y = palpy.ds2tpVector(candidateSkyPix[:,0], candidateSkyPix[:,1],
-                                 visit.ra, visit.dec)
+        # sphere at the altaz of (visit.ra, visit.dec)
+
+        visitAltaz = AstronomicalSky.radec2altaz(np.array([[visit.ra, visit.dec]]),
+                                                 self.context.time())
+        candidateAltaz = AstronomicalSky.radec2altaz(candidateSkyPix,
+                                                     self.context.time())
+
+        #x, y = palpy.ds2tpVector(candidateSkyPix[:,0], candidateSkyPix[:,1],
+        #                         visit.ra, visit.dec)
+        x, y = palpy.ds2tpVector(candidateAltaz[:,1], candidateAltaz[:,0],
+                                 visitAltaz[0][1], visitAltaz[0][0])
         x *= -1
 
         # TODO rotate depending on the angle of the focal plane wrt the sky
@@ -329,6 +334,9 @@ class GraphicalMonitor:
             
             # first handle the pixels in this row which will be replaced by
             # pixels which have wrapped around
+            # TODO I get an error here:
+            # "could not broadcast input array from shape (0) into shape (662)"
+            # around day 125
             imdata[iy, rowStart:rowStart + numPixMoved] = \
                     self.pixValues[rowStartProjPixId + rowLen - numPixMoved : \
                                    rowStartProjPixId + rowLen]
