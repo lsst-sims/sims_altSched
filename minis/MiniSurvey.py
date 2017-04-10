@@ -61,6 +61,7 @@ class MiniSurvey:
         theta = allPointings[:,1]
         newPhi = np.arctan2(-sin(xDither)*sin(theta) + cos(xDither)*cos(theta)*sin(phi),
                             cos(theta)*cos(phi))
+        newPhi %= 2 * np.pi
         newTheta = np.arcsin(cos(xDither)*sin(theta) + sin(xDither)*cos(theta)*sin(phi))
         allPointings = np.vstack([newPhi, newTheta]).T
 
