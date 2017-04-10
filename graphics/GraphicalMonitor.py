@@ -118,7 +118,7 @@ class GraphicalMonitor:
                                                Config.surveyStartTime)[0,0]
 
         # calculate a contour around the whole sky
-        dec = np.linspace(-np.pi/2, np.pi/2, num=2000)
+        dec = np.linspace(-np.pi/2, np.pi/2, num=700*self.imScale)
 
         ra = np.radians(180) * np.ones(dec.shape)
         plus = self.radec2imdata(np.vstack([ra, dec]).T)
@@ -130,14 +130,14 @@ class GraphicalMonitor:
 
         # calculate a contour in imdata representing 2 airmasses
         nAirmass = 2
-        airmassContourAz = np.linspace(0,2 * np.pi, num=500)
+        airmassContourAz = np.linspace(0,2 * np.pi, num=500*self.imScale)
         # airmass = csc theta
         airmassContourAlt = np.ones(airmassContourAz.shape) * np.arcsin(1 / nAirmass) 
         airmassContourAltaz = np.vstack([airmassContourAlt, airmassContourAz]).T
         self.airmassContour = self.altaz2imdata(airmassContourAltaz)
         
         # calculate a contour in imdata representing the zenith avoidance zone
-        zenithAvoidAz = np.linspace(0, 2 * np.pi, num = 100)
+        zenithAvoidAz = np.linspace(0, 2 * np.pi, num=30*self.imScale)
         zenithAvoidAlt = Telescope.maxAlt * np.ones(zenithAvoidAz.shape)
         zenithAvoidAltaz = np.vstack([zenithAvoidAlt, zenithAvoidAz]).T
         self.zenithAvoidContour = self.altaz2imdata(zenithAvoidAltaz)
