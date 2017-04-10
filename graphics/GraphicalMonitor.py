@@ -142,6 +142,9 @@ class GraphicalMonitor:
         zenithAvoidAltaz = np.vstack([zenithAvoidAlt, zenithAvoidAz]).T
         self.zenithAvoidContour = self.altaz2imdata(zenithAvoidAltaz)
 
+        # calculate where the meridian contour should go
+        self.meridianX = self.altaz2imdata(np.array([[0,0]]))[0,0]
+
         # take out pixels that are in the projection rectangle but
         # don't actually represent places on the sky (i.e. pixels in the corners)
         validMask = ~np.any(np.isnan(self.skyPix), axis=1)
@@ -345,7 +348,7 @@ class GraphicalMonitor:
         imdata = self.packedColorLookup[hue]
 
         # draw a line down the middle to represent the meridian
-        imdata[self.xCenter,:] = 0
+        imdata[self.meridianX,:] = 0
 
         # outline the whole sky
         imdata[self.wholeSkyContour[:,0], self.wholeSkyContour[:,1]] = 0
