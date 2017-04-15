@@ -14,6 +14,7 @@ from matplotlib import pyplot as plt
 
 showDisp = True
 saveMovie = False
+plotAzes = False
 
 # TODO plot azimuth vs time
 # change filters every revisit set (revisits 1 hour, change every 2 hours)
@@ -37,19 +38,40 @@ class Simulator:
         slewTimes = []
         revisitTimes = []
 
+        # keep track of the alt and az of each visit
+        alts = []
+        azes = []
+        if plotAzes:
+            plt.clf()
+            plt.xlabel("visit number")
+            plt.ylabel("azimuth (degrees)")
+            plt.ylim(0, 360)
+            plt.ion()
+            plt.show()
+
         i = 0
         prevI = i
         for visit in sched.schedule():
             # if visit is None, that means the scheduler ran out of places
             # to point for the night
             if visit is not None:
+                # keep track of the alt and az of each visit
                 radec = np.array([[visit.ra, visit.dec]])
                 altaz = AstronomicalSky.radec2altaz(radec, self.time())[0]
+                alts.append(altaz[0])
+                azes.append(altaz[1])
                 if not isNightYoung:
                     slewTime = Telescope.calcSlewTime(prevAltaz, altaz)
 
+                # notify the display of the visit
                 if showDisp:
                     display.addVisit(visit) 
+
+            # plot the azimuth at each time step
+            if plotAzes:
+                plt.scatter(range(len(azes)), np.degrees(azes))
+                plt.draw()
+                plt.pause(0.01)
 
             # decide how often to update the display so we can get
             # a speeding up effect
