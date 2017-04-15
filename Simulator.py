@@ -13,7 +13,6 @@ import time
 from matplotlib import pyplot as plt
 
 showDisp = True
-dispUpdateFreq = 1
 saveMovie = False
 
 # TODO plot azimuth vs time
@@ -30,9 +29,7 @@ class Simulator:
 
         # imScale is the resolution (and therefore the speed) that we want
         if showDisp:
-            display = GraphicalMonitor(context=self, imScale=4, numVisitsDisplayed=None)
-            #display = GraphicalMonitor3D(context = self, res = 180)
-            #display.init()
+            display = GraphicalMonitor(context=self, imScale=5, numVisitsDisplayed=None)
        
         nightNum = 0
         isNightYoung = True
@@ -41,6 +38,7 @@ class Simulator:
         revisitTimes = []
 
         i = 0
+        prevI = i
         for visit in sched.schedule():
             # if visit is None, that means the scheduler ran out of places
             # to point for the night
@@ -51,19 +49,32 @@ class Simulator:
                     slewTime = Telescope.calcSlewTime(prevAltaz, altaz)
 
                 if showDisp:
-                    display.addVisit(visit)      
+                    display.addVisit(visit) 
 
-            if showDisp:
-                if i % dispUpdateFreq == 0:
-                    display.updateDisplay()
-                    #plt.savefig("images/pernight/%04d.png" % nightNum)
-                    if saveMovie:
-                        display.saveFrame("images/pygame/%05d.png" % (i / dispUpdateFreq))
+            # decide how often to update the display so we can get
+            # a speeding up effect
+            perNight = False
+            if 0 <= i < 1000:
+                deltaI = 1
+            if 1000 <= i < 1500:
+                deltaI = int((i - 1000)/500*10) + 1
+            if 1500 <= i < 10000:
+                deltaI = 10
+            if 10000 <= i < 50000:
+                deltaI = int((i - 10000)/50000*900) + 10
+            if 50000 <= i:
+                perNight = True
+
+            if showDisp and ((    perNight and isNightYoung) or
+                             (not perNight and i - prevI >= deltaI)):
+                display.updateDisplay()
+                prevI = i
+                if saveMovie:
+                    display.saveFrame("images/pygame/%06d.png" % i)
 
             if i % 10000 == 0:
                 print i
 
-            
             if visit is None:
                 self.curTime += 30
             else:
@@ -88,7 +99,6 @@ class Simulator:
                 isNightYoung = True
 
             i += 1
-            #if showDisp and saveVid:
             if i > 30000:
                 print "avg slew time", np.mean(slewTimes), "seconds"
                 plt.hist(slewTimes, bins = np.arange(min(slewTimes), max(slewTimes), 0.5))
