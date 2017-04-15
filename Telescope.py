@@ -45,6 +45,8 @@ longitude = np.radians(-(70 + 44 / 60 + 57.9 / 3600))
 
 location = EarthLocation(lon = longitude * u.rad, lat = latitude * u.rad)
 
+settleTime = 3
+
 def calcSlewTime(altaz1, altaz2):
     # assume that we don't have to worry about the dome slew time
     # (might be reasonable if we never do long slews)
@@ -78,4 +80,4 @@ def calcSlewTime(altaz1, altaz2):
     azSlewTime  = uamSlewTime(deltaAz,  telAzMaxSpeed,  telAzAccel)
     #print "slew alt/az", altSlewTime, azSlewTime
     #print
-    return max(altSlewTime, azSlewTime)
+    return max(altSlewTime, azSlewTime) + settleTime
