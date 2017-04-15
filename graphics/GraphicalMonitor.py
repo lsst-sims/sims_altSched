@@ -254,12 +254,12 @@ class GraphicalMonitor:
             # candidate pix must be within 2 degrees of visit ra normalized
             # by cos(dec) to avoid cutting off near poles
             # np.max to prevent div by 0
-            if len(candidateDecs) == 0:
-                "len=0!"
-                print visit
             deltaRa = np.radians(2) / max(np.cos(candidateDecs).max(), 0.001)
             
-            withinRange = np.where(abs(candidateRas - visit.ra) < deltaRa)
+            raRange = ((visit.ra - deltaRa) % (2*np.pi), 
+                       (visit.ra + deltaRa) % (2*np.pi))
+            withinRange = Utils.areRasInRange(candidateRas, raRange)
+            #withinRange = np.where(abs(candidateRas - visit.ra) < deltaRa)
             candidatePixIds = candidatePixIds[withinRange]
 
             candidateSkyPix = self.skyPix[candidatePixIds]
