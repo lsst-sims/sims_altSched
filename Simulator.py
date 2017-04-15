@@ -25,6 +25,25 @@ class Simulator:
         self.startTime = Config.surveyStartTime
         self.curTime = self.startTime
 
+    @staticmethod
+    def getUpdateRate(i):
+        # decide how often to update the display so we can get
+        # a speeding up effect
+        perNight = False
+        deltaI = 0
+        if 0 <= i < 1000:
+            deltaI = 1
+        if 1000 <= i < 1500:
+            deltaI = int((i - 1000)/500*10) + 1
+        if 1500 <= i < 10000:
+            deltaI = 10
+        if 10000 <= i < 50000:
+            deltaI = int((i - 10000)/50000*900) + 10
+        if 50000 <= i:
+            perNight = True
+
+        return (perNight, deltaI)
+
     def run(self):
         sched = Scheduler(context=self)
 
@@ -73,19 +92,7 @@ class Simulator:
                 plt.draw()
                 plt.pause(0.01)
 
-            # decide how often to update the display so we can get
-            # a speeding up effect
-            perNight = False
-            if 0 <= i < 1000:
-                deltaI = 1
-            if 1000 <= i < 1500:
-                deltaI = int((i - 1000)/500*10) + 1
-            if 1500 <= i < 10000:
-                deltaI = 10
-            if 10000 <= i < 50000:
-                deltaI = int((i - 10000)/50000*900) + 10
-            if 50000 <= i:
-                perNight = True
+            perNight, deltaI = self.getUpdateRate(i)
 
             if showDisp and ((    perNight and isNightYoung) or
                              (not perNight and i - prevI >= deltaI)):
