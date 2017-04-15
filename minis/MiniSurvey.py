@@ -10,6 +10,8 @@ import Utils
 from astropy import wcs
 
 class MiniSurvey:
+    NORTH = 0
+    SOUTH = 1
 
     # the very first mini should have rotation -pi/2
     prevRot = -1
@@ -38,10 +40,7 @@ class MiniSurvey:
         cls.rotationGenerator = RotationGenerator(rotation, direction)
 
     @classmethod
-    def newMiniSurvey(cls, minRa, maxRa):
-        minDec = Config.minDec
-        maxDec = Config.maxDec
-
+    def newMiniSurvey(cls, minDec, maxDec, minRa, maxRa):
         rotation = next(cls.rotationGenerator.rotations())
         #allPointings = cls._generateRandomPointings()
         allPointings = cls._realGeneratePointings()

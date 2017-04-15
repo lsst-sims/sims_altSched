@@ -12,7 +12,10 @@ import Utils
 
 # add a new mini-survey whenever we dip below this much times
 # the expected number of visits needed in a night
-NUM_VISITS_PADDING = 1.2
+NUM_VISITS_PADDING = 1
+
+NORTH = 0
+SOUTH = 1
 
 class Scheduler:
     def __init__(self, context):
@@ -22,12 +25,27 @@ class Scheduler:
 
         # these estimates get updated at the end of each night
         # (currently estAvgExpTime is not updated)
-        self.estAvgSlewTime = 3 # seconds
+        self.estAvgSlewTime = 5 # seconds
         self.estAvgExpTime = 30 #seconds
 
         # keep track of how long we spend slewing each night
         # so we can update our estimate of the average slew time each night
         self.curNightSlewTimes = []
+
+        # int_{telLat+5 deg}^{maxDec} 2\pi r dr, where r=\cos\theta
+        # = 2\pi (\sin(maxDec) - \sin(telLat+5 deg)) 
+        self.areaInNorth = 2*np.pi*(np.sin(Config.maxDec) - \
+                                    np.sin(Telescope.latitude + np.radians(5)))
+
+        # similar for south
+        self.areaInSouth = 2*np.pi*(np.sin(Telescope.latitude - np.radians(5)) - \
+                                    np.sin(Config.minDec))
+
+        self.numVisitsScheduledInNorth = 0
+        self.numVisitsScheduledInSouth = 0
+
+        self.numVisitsPendingInNorth = 0
+        self.numVisitsPendingInSouth = 0
 
     def schedule(self):
         for nightNum in range(Config.surveyNumNights):
@@ -51,6 +69,12 @@ class Scheduler:
             self.estAvgSlewTime = np.mean(self.curNightSlewTimes)
 
     def _scheduleNight(self, nightNum):
+        if (self.numVisitsScheduledInNorth / self.areaInNorth < 
+                self.numVisitsScheduledInSouth / self.areaInSouth):
+            direction = NORTH
+        else:
+            direction = SOUTH
+
         # figure out how many visits we'll probably do tonight
         nightLength = AstronomicalSky.nightLength(nightNum)
         t = self.estAvgSlewTime + self.estAvgExpTime
@@ -59,11 +83,11 @@ class Scheduler:
         expectedNumVisitPairs = int(expectedNumVisits / 2)
 
         # figure out whether we need to add a new mini
-        pendingVisitPairs = self._calculatePendingVisitPairs(nightNum)
+        pendingVisitPairs = self._calculatePendingVisitPairs(nightNum, direction)
 
         while len(pendingVisitPairs) < expectedNumVisitPairs * NUM_VISITS_PADDING:
-            self._addNewMiniSurvey(nightNum)
-            pendingVisitPairs = self._calculatePendingVisitPairs(nightNum)
+            self._addNewMiniSurvey(nightNum, direction)
+            pendingVisitPairs = self._calculatePendingVisitPairs(nightNum, direction)
 
         # choose which visitPairs we're going to execute tonight
         # TODO could prioritize doing stale visitPairs
@@ -158,6 +182,11 @@ class Scheduler:
             if visitPair.miniSurvey.numIncompleteVisitPairs <= 0:
                 raise RuntimeError("negative numIncompleteVisitPairs")
             visitPair.miniSurvey.numIncompleteVisitPairs -= 1
+            northDecRange = self._getDecRange(NORTH)
+            if northDecRange[0] <= visitPair.dec <= northDecRange[1]:
+                self.numVisitsPendingInNorth -= 1
+            else:
+                self.numVisitsPendingInSouth -= 1
 
     def _scheduleRestOfNight(self):
         # TODO questionable function but might need in case of clouds?
@@ -173,8 +202,14 @@ class Scheduler:
 
         return (raStart, raEnd)
 
+    def _getDecRange(self, direction):
+        if direction == NORTH:
+            decRange = (Telescope.latitude + np.radians(5), Config.maxDec)
+        else:
+            decRange = (Config.minDec, Telescope.latitude - np.radians(5))
+        return decRange
 
-    def _calculatePendingVisitPairs(self, nightNum):
+    def _calculatePendingVisitPairs(self, nightNum, direction):
         # TODO this method is very slow! Need to run line_profiler 
         # problem is that miniSurveys are never deleted from ongoingSurvey
         # and visitPairs are never removed from miniSurveys
@@ -182,6 +217,7 @@ class Scheduler:
         # return all the visitPairs in ongoingSurvey which have
         # yet to be completed 
         raRange = self._getNightRaRange(nightNum)
+        decRange = self._getDecRange(direction)
 
         visitPairs = set()
         #print "self.ongoingSurvey.miniSurveys length", len(self.ongoingSurvey.miniSurveys)
@@ -194,18 +230,29 @@ class Scheduler:
                         # note that this means a visit returned by this function
                         # as pending might already be half-completed.
                         # schedule() must handle this case
-                        if Utils.isRaInRange(visitPair.ra, raRange):
+                        if Utils.isRaInRange(visitPair.ra, raRange) and \
+                           decRange[0] < visitPair.dec < decRange[1]:
                             visitPairs.add(visitPair)
         return visitPairs
 
-    def _addNewMiniSurvey(self, nightNum):
+    def _addNewMiniSurvey(self, nightNum, direction):
         # called at the beginning of a night when there aren't 
         # enough pending visits left
 
         (raStart, raEnd) = self._getNightRaRange(nightNum)
         print "new mini on night", nightNum, "with ra: (", raStart, ",", raEnd, ")"
 
-        newMini = MiniSurvey.newMiniSurvey(raStart, raEnd)
+        minDec, maxDec = self._getDecRange(direction)
+
+        newMini = MiniSurvey.newMiniSurvey(minDec, maxDec, raStart, raEnd)
+        numVisitPairs = len(newMini.visitPairs)
+        if direction == NORTH:
+            self.numVisitsScheduledInNorth += numVisitPairs
+            self.numVisitsPendingInNorth += numVisitPairs
+        else:
+            self.numVisitsScheduledInSouth += numVisitPairs
+            self.numVisitsPendingInSouth += numVisitPairs
+
         self.ongoingSurvey.miniSurveys.append(newMini)
 
     def _generateScans(self, nightNum, visitPairs):
