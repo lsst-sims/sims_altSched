@@ -167,6 +167,12 @@ class GraphicalMonitor:
         zenithAvoidAltaz = np.vstack([zenithAvoidAlt, zenithAvoidAz]).T
         self.zenithAvoidContour = self.altaz2imdata(zenithAvoidAltaz)
 
+        # calculate contours at various azimuths from zenith to the horizon
+        azes = np.linspace(0, 2 * np.pi, num=16)
+        alts = np.linspace(0, np.pi/2, num=200 * self.imScale) 
+        azContourAltAz = np.array([[alt, az] for az in azes for alt in alts])
+        self.azContour = self.altaz2imdata(azContourAltAz)
+
         # calculate where the meridian contour should go
         self.meridianX = self.altaz2imdata(np.array([[0,0]]))[0,0]
 
@@ -395,6 +401,9 @@ class GraphicalMonitor:
 
         # draw a circle at zenith
         imdata[self.zenithAvoidContour[:,0], self.zenithAvoidContour[:,1]] = 0
+
+        # draw contours of constant azimuth
+        imdata[self.azContour[:,0], self.azContour[:,1]] = 0
 
         # draw the contour at 2 airmasses
         imdata[self.airmassContour[:,0], self.airmassContour[:,1]] = 0
