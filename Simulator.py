@@ -107,12 +107,15 @@ class Simulator:
                     self.curTime += slewTime
                     slewTimes.append(slewTime)
                 sched.notifyVisitComplete(visit, self.time())
+
+                # keep track of revisit times
                 visitPair = visit.visitPair
                 if visitPair.visit1.isComplete and visitPair.visit2.isComplete:
                     revisitTimes.append(np.abs(visitPair.visit1.timeOfCompletion - \
                                                visitPair.visit2.timeOfCompletion))
                 prevAltaz = altaz
 
+            # process the end of the night if necessary
             if self.curTime < AstronomicalSky.nightEnd(nightNum):
                 isNightYoung = False
             else:
