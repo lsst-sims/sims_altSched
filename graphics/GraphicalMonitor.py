@@ -38,8 +38,7 @@ class GraphicalMonitor:
         # * multiply dec by -1 so higher dec => higher in the img, not lower
         # * center the result 
         
-        shifted = radec
-        rawPix = self.w.wcs_world2pix(np.degrees(shifted),0)
+        rawPix = self.w.wcs_world2pix(np.degrees(radec),1)
         imdataPix = rawPix * self.imScale
         imdataPix[:,1] *= -1
         imdataPix = imdataPix.astype(int)
@@ -58,7 +57,7 @@ class GraphicalMonitor:
         rawPix = imdata - np.array([self.xCenter, self.yCenter])
         rawPix[:,0] *= -1
         rawPix /= self.imScale
-        radec = self.w.wcs_pix2world(np.degrees(rawPix),0)
+        radec = self.w.wcs_pix2world(np.degrees(rawPix),1)
         return radec
 
     def altaz2imdata(self, altaz):
@@ -78,25 +77,50 @@ class GraphicalMonitor:
         raise NotImplementedError("imdata2altaz not implemented yet")
         return
 
+    def radec2projPix(self, radec):
+        # pix is the coord where the center is (0,0)
+        pix = self.w.wcs_world2pix(np.degrees(radec), 1)
+        pix *= self.imScale
+
+        # ys is the y value where 0 is in the middle
+        ys = pix[:,1].astype(int)
+
+        # rowNums is the y value where 0 is at the top
+        rowNums = ys - self.yMin
+        rowLengths = np.array([self.rowLengths[y] for y in ys])
+
+        # rowStarts is the index into self.skyPix of the start
+        # of the row that radec is in
+        rowStarts = self.rowLengthsCumSum[rowNums]
+
+        # offsets is the x offset needed to add to rowStarts
+        # to get the actual position of pix within self.skyPix
+        offsets = (pix[:,0] + (rowLengths / 2)).astype(int)
+
+        return rowStarts + offsets
+
     def __init__(self, context, imScale, numVisitsDisplayed=None):
         self.context = context
         self.imScale = imScale
-
-        # this the approximate range of output from wcs_world2pix
-        (wcsYMin, wcsYMax) = (-85, 85)
-        (wcsXMin, wcsXMax) = (-170, 170)
-
-        # these are the range of pixels we're going to display
-        (self.yMin, self.yMax) = (int(imScale * wcsYMin), int(imScale * wcsYMax))
-        (self.xMin, self.xMax) = (int(imScale * wcsXMin), int(imScale * wcsXMax))
-        self.xCenter = int((self.xMax - self.xMin) / 2)
-        self.yCenter = int((self.yMax - self.yMin) / 2)
+        self.pendingVisits = []
 
         # create a WCS object to do the transforms from the sphere to the
         # Mollweide projection
         self.w = wcs.WCS(naxis=2)
         # TODO figure out what the dash syntax is
         self.w.wcs.ctype = ["RA---MOL", "DEC--MOL"]
+
+        # this the range of output from wcs_world2pix
+        yLim = np.ceil(self.w.wcs_world2pix([[0,90]], 1)[0,1])
+        xLim = np.ceil(self.w.wcs_world2pix([[180,0]], 1)[0,0])
+        (wcsYMin, wcsYMax) = (-yLim, yLim)
+        (wcsXMin, wcsXMax) = (-xLim, xLim)
+
+        # these are the range of pixels we're going to display
+        (self.yMin, self.yMax) = (int(imScale * wcsYMin), int(imScale * wcsYMax))
+        (self.xMin, self.xMax) = (int(imScale * wcsXMin), int(imScale * wcsXMax))
+        self.xCenter = int((self.xMax - self.xMin) / 2)
+        self.yCenter = int((self.yMax - self.yMin) / 2)
 
         # a list of all the pixels [y, x]
         # note that the order that these are created in is very important
@@ -109,8 +133,9 @@ class GraphicalMonitor:
         # The ra values only go up to 359
         # TODO refactor
         projPixReversed = np.vstack([projPix[:,1], projPix[:,0]]).T
-        self.skyPix = self.w.wcs_pix2world(projPixReversed / imScale, 0)
+        self.skyPix = self.w.wcs_pix2world(projPixReversed / imScale, 1)
         self.skyPix = np.radians(self.skyPix)
+        print "skyPix", self.skyPix
 
         # calculate ra_0: the ra of the zenith at Config.surveyStartTime
         # this is used to make the zenith centered in the displayed image
@@ -149,11 +174,14 @@ class GraphicalMonitor:
         # don't actually represent places on the sky (i.e. pixels in the corners)
         validMask = ~np.any(np.isnan(self.skyPix), axis=1)
         projPix = projPix[validMask]
+        print "projPix", projPix.shape
         self.skyPix = self.skyPix[validMask]
+        print "self.skyPix[validMask]", self.skyPix, self.skyPix.shape
 
         # put the sky coordinates into a k-d tree so we can quickly 
         # compute nearest neighbors
         cartesianPix = Utils.spherical2Cartesian(self.skyPix[:,0], self.skyPix[:,1])
+        print "cartesianPix", cartesianPix
         self.skyPixTree = KDTree(cartesianPix)
 
         # store the number of visits to each pixel in pixValues
@@ -168,6 +196,10 @@ class GraphicalMonitor:
         # keep track of how long each row of pixels is in the mollweide
         self.rowLengths = {y: (projPix[:,0] == y).sum() 
                            for y in range(self.yMin, self.yMax)}
+        self.rowLengthsCumSum = [sum(self.rowLengths[y] 
+                                   for y in range(self.yMin, self.yMin + i))
+                                 for i in range(self.yMax - self.yMin)]
+        self.rowLengthsCumSum = np.array(self.rowLengthsCumSum)
         
         # create a lookup table for hsv=>packed color int since hsv_to_rgb is "slow"
         hue = np.linspace(0,1,num=256)
@@ -182,108 +214,108 @@ class GraphicalMonitor:
 
 
     def addVisit(self, visit):
+        self.pendingVisits.append(visit)
+
+    def _addVisits(self):
+        # batch process the pending visits added using self.addVisit
         # edgeOfFov should be the radius of a circle that includes all of the fov
         edgeOfFov = Utils.spherical2Cartesian(0, 1.5 * Telescope.fovWidth / 2)
         r = np.linalg.norm(np.array([1,0,0]) - np.array(edgeOfFov))
-        cartesianVisit = Utils.spherical2Cartesian(visit.ra, visit.dec)
+
+        ras =  np.array([visit.ra  for visit in self.pendingVisits])
+        decs = np.array([visit.dec for visit in self.pendingVisits])
+
+        # N x 3
+        cartesianVisits = Utils.spherical2Cartesian(ras, decs)
 
         # get a list of all pixels which might lie on the focal plane
-        # TODO this takes ~2-10ms. Just running .query() takes 0.5ms
-        # conclusion: precompute nearest neighbor balls around every pixel
-        # and then here all we have to do is .query() to get the nearest
-        # pixel followed by an index into the precomputed array (~0.5us)
-        # looks like precomputing takes 23 seconds (I think this is for
-        # imscale=2)
+        # (I was originally using a KDTree of all sky pixels in cartesian
+        # coordinates and then querying it to get the candidate pix, but
+        # this was about 20x slower (for imScale=5) )
 
-        candidatePixIds = self.skyPixTree.query_ball_point(cartesianVisit, r)
-        candidatePixIds = np.array(candidatePixIds)
-        """
-        Ideally I could just use this, but _chipNameFromRaDec calls 
-        _pupilCoordsFromRaDec which first converts from ICRS ra/dec to 
-        observed ra/dec which is all well and good except that it's 
-        painfully slow (6ms/pixel). So instead I just do what 
-        _pupilCoordsFromRaDec does but cut the conversion.
+        for i, visit in enumerate(self.pendingVisits):
+            # candidate pix must be within 2 degrees of visit dec
+            deltaDec = np.radians(2)
+            minDec = max(visit.dec - deltaDec, -np.pi/2)
+            maxDec = min(visit.dec + deltaDec, np.pi/2)
+            projPixRange = self.radec2projPix([[0, minDec],
+                                               [0, maxDec]])
+            
+            candidatePixIds = np.arange(projPixRange[0], projPixRange[1])
 
-        Even once I've calculated the pupil coords, calling 
-        lsst.sims.coordUtils.chipNameFromPupilCoords() is also 
-        incredibly slow (was ~3/4 of my run time at one point), so I 
-        have to reimplement that too in arePixCovered() below
+            candidateRas, candidateDecs = self.skyPix[candidatePixIds].T
 
+            # candidate pix must be within 2 degrees of visit ra normalized
+            # by cos(dec) to avoid cutting off near poles
+            # np.max to prevent div by 0
+            if len(candidateDecs) == 0:
+                "len=0!"
+                print visit
+            deltaRa = np.radians(2) / max(np.cos(candidateDecs).max(), 0.001)
+            
+            withinRange = np.where(abs(candidateRas - visit.ra) < deltaRa)
+            candidatePixIds = candidatePixIds[withinRange]
 
-        from lsst.sims.coordUtils import _chipNameFromRaDec
-        from lsst.sims.utils import ObservationMetaData
+            candidateSkyPix = self.skyPix[candidatePixIds]
 
-        from lsst.obs.lsstSim import LsstSimMapper
-        mapper = LsstSimMapper()
-        camera = mapper.camera
+            # calculate the pupil coordinates x, y of the obsMetaData
+            # i.e. project candidateSkyPix onto the plane tangent to the unit
+            # sphere at the altaz of (visit.ra, visit.dec)
 
-        obsMetaData = ObservationMetaData(pointingRA = np.degrees(visit.ra),
-                                          pointingDec = np.degrees(visit.dec),
-                                          rotSkyPos = np.degrees(visit.rotation),
-                                          mjd = Utils.mjd(self.context.time()))
+            radec = np.array([[visit.ra, visit.dec]])
+            visitAltaz = AstronomicalSky.radec2altaz(radec, self.context.time())
+            candidateAltaz = AstronomicalSky.radec2altaz(candidateSkyPix,
+                                                         self.context.time())
 
-        chipNames = _chipNameFromRaDec(skyPix[candidatePixIds,0],
-                                       skyPix[candidatePixIds,1],
-                                       camera = camera,
-                                       epoch = 2000.0,
-                                       obs_metadata = obsMetaData)
-        """
-        candidateSkyPix = self.skyPix[candidatePixIds]
+            x, y = palpy.ds2tpVector(candidateAltaz[:,1], candidateAltaz[:,0],
+                                     visitAltaz[0][1], visitAltaz[0][0])
+            x *= -1
 
-        # calculate the pupil coordinates x, y of the obsMetaData
-        # i.e. project candidateSkyPix onto the plane tangent to the unit
-        # sphere at the altaz of (visit.ra, visit.dec)
+            # TODO rotate depending on the angle of the focal plane wrt the sky
+            # not just the absolute rotation of the visit
+            xPupil = x * np.cos(visit.rotation) - y * np.sin(visit.rotation)
+            yPupil = x * np.sin(visit.rotation) + y * np.cos(visit.rotation)
 
-        visitAltaz = AstronomicalSky.radec2altaz(np.array([[visit.ra, visit.dec]]),
-                                                 self.context.time())
-        candidateAltaz = AstronomicalSky.radec2altaz(candidateSkyPix,
-                                                     self.context.time())
+            # figure out which chip these pupil coords lie on
+            pupilCoords = np.vstack([xPupil, yPupil]).T
 
-        #x, y = palpy.ds2tpVector(candidateSkyPix[:,0], candidateSkyPix[:,1],
-        #                         visit.ra, visit.dec)
-        x, y = palpy.ds2tpVector(candidateAltaz[:,1], candidateAltaz[:,0],
-                                 visitAltaz[0][1], visitAltaz[0][0])
-        x *= -1
+            def arePixCovered(x, y):
+                # this code ignores the gaps between rafts and chips
 
-        # TODO rotate depending on the angle of the focal plane wrt the sky
-        # not just the absolute rotation of the visit
-        xPupil = x * np.cos(visit.rotation) - y * np.sin(visit.rotation)
-        yPupil = x * np.sin(visit.rotation) + y * np.cos(visit.rotation)
+                # I found these by evaluating chilNameFromPupilCoords many times
+                # please ignore the number of sig figs (no idea if my testing
+                # was that accurate)
+                # TODO I think this might be in units of radians?
+                edge = 0.030756 # outer edge in units of pupil coords
+                raftWidth = 0.012303 # width of a raft in pupil coords
 
-        # figure out which chip these pupil coords lie on
-        pupilCoords = np.vstack([xPupil, yPupil]).T
+                # consider the camera CCD collection to be a cross composed
+                # of a horizontal and vertical rectangle placed on top of
+                # each other. The first two lines check if the pixel is in
+                # the horizontal rectangle and the second two in the vertical
 
-        def arePixCovered(x, y):
-            # this code ignores the gaps between rafts and chips
+                return (((x > -edge) & (x < edge) &
+                         (y > -edge + raftWidth) & (y < edge - raftWidth)) |
+                        ((y > -edge) & (y < edge) &
+                         (x > -edge + raftWidth) & (x < edge - raftWidth)))
 
-            # I found these by evaluating chilNameFromPupilCoords many times
-            # please ignore the number of sig figs (no idea if my testing
-            # was that accurate)
-            edge = 0.030756 # outer edge in units of pupil coords
-            raftWidth = 0.012303 # width of a raft in pupil coords
+            
+            coveredPixIds = candidatePixIds[arePixCovered(pupilCoords[:,0],
+                                                          pupilCoords[:,1])]
+            if self.useVisitQueue:
+                self.visitQueue.append(coveredPixIds)
+            else:
+                # if we're not keeping the visits in a queue, we can just 
+                # increment coveredPixIds's counts in pixValues
+                self.pixValues[coveredPixIds] += 1
 
-            # consider the camera CCD collection to be a cross composed
-            # of a horizontal and vertical rectangle placed on top of
-            # each other. The first two lines check if the pixel is in
-            # the horizontal rectangle and the second two in the vertical
-
-            return (((x > -edge) & (x < edge) &
-                     (y > -edge + raftWidth) & (y < edge - raftWidth)) |
-                    ((y > -edge) & (y < edge) &
-                     (x > -edge + raftWidth) & (x < edge - raftWidth)))
-
-        
-        coveredPixIds = candidatePixIds[arePixCovered(pupilCoords[:,0],
-                                                      pupilCoords[:,1])]
-        if self.useVisitQueue:
-            self.visitQueue.append(coveredPixIds)
-        else:
-            # if we're not keeping the visits in a queue, we can just 
-            # increment coveredPixIds's counts in pixValues
-            self.pixValues[coveredPixIds] += 1
+        # reset pendingVisits
+        self.pendingVisits = []
 
 
     def updateDisplay(self):
+        self._addVisits()
+
         startTime = Config.surveyStartTime
         curTime = self.context.time()
 
