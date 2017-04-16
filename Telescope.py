@@ -3,7 +3,8 @@ import numpy as np
 from astropy.coordinates import EarthLocation
 from astropy import units as u
 
-fovWidth = np.radians(3.2)
+fovWidth = np.radians(3.5)
+domSlitDiam = 2 * fovWidth
 raftWidth = fovWidth / 5
 minRotation = -np.pi/2
 maxRotation = np.pi/2
@@ -50,7 +51,7 @@ settleTime = 3
 def calcSlewTime(altaz1, altaz2):
     # assume that we don't have to worry about the dome slew time
     # (might be reasonable if we never do long slews)
-    # FYI this takes on the order of 10us for 1 slew calculation
+    # FYI this takes on the order of 10us for 1 slew calculation (longer now)
 
     # TODO also assumes we never max out the cable wrap-around constraint 
     deltaAlt = np.abs(altaz2[0] - altaz1[0])
@@ -76,8 +77,29 @@ def calcSlewTime(altaz1, altaz2):
 
     #print "Delta alt", np.degrees(deltaAlt)
     #print "Delta az", np.degrees(deltaAz)
-    altSlewTime = uamSlewTime(deltaAlt, telAltMaxSpeed, telAltAccel)
-    azSlewTime  = uamSlewTime(deltaAz,  telAzMaxSpeed,  telAzAccel)
+    telAltSlewTime = uamSlewTime(deltaAlt, telAltMaxSpeed, telAltAccel)
+    telAzSlewTime  = uamSlewTime(deltaAz,  telAzMaxSpeed,  telAzAccel)
+
+    # if we can fit both exposures in the dome slit, do so
+    if deltaAlt**2 + deltaAz**2 < fovWidth**2:
+        domAltSlewTime = domAzSlewTime = 0
+    else:
+        # else, assume we line up alt in the center of the dome slit so we 
+        # minimize distance we have to travel in azimuth.
+        # also assume:
+        # * that we start out going maxspeed for both alt and az
+        # * that we only just barely have to get the new field in the dome slit
+        #   in the az direction, but that we have to center the field in alt
+        # * that we don't have to slow down until after the shutter starts opening
+        domDeltaAlt = deltaAlt
+
+        # on each side, we can start out with the dome shifted away from the
+        # center of the field by an amount domSlitRadius - fovRadius
+        domDeltaAz = deltaAz - 2 * (domSlitDiam/2 - fovWidth/2)
+
+        domAltSlewTime = domDeltaAlt / domAltMaxSpeed
+        domAzSlewTime  = domDeltaAz  / domAzMaxSpeed
+
     #print "slew alt/az", altSlewTime, azSlewTime
     #print
-    return max(altSlewTime, azSlewTime) + settleTime
+    return max(telAltSlewTime, telAzSlewTime, domAltSlewTime, domAzSlewTime) + settleTime
