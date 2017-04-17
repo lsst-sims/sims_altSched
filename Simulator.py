@@ -9,10 +9,13 @@ import Config
 import AstronomicalSky
 import Telescope
 import time
+import sys
 
 from matplotlib import pyplot as plt
 
-showDisp = True
+from testOpsimAltAz import showAirmassPlots
+
+showDisp = False
 saveMovie = False
 plotAzes = False
 
@@ -60,6 +63,7 @@ class Simulator:
         # keep track of the alt and az of each visit
         alts = []
         azes = []
+        obsDecs = []
         if plotAzes:
             plt.clf()
             plt.xlabel("visit number")
@@ -79,6 +83,7 @@ class Simulator:
             if visit is not None:
                 # keep track of the alt and az of each visit
                 radec = np.array([[visit.ra, visit.dec]])
+                obsDecs.append(visit.dec)
                 altaz = AstronomicalSky.radec2altaz(radec, self.time())[0]
                 alts.append(altaz[0])
                 azes.append(altaz[1])
@@ -131,25 +136,39 @@ class Simulator:
                 isNightYoung = True
 
             i += 1
-            if i > 1000000000:
-                print "avg slew time", np.mean(slewTimes), "seconds"
-                print "median slew time", np.median(slewTimes), "seconds"
-                plt.hist(slewTimes, bins = np.arange(min(slewTimes), max(slewTimes), 0.5))
-                plt.xlabel("Slew Time (secs)")
-                plt.ylabel("Number of slews")
-                plt.title("Histogram of Slew Times")
+            if i > 200000:
+                print
+                break
+        print "avg slew time", np.mean(slewTimes), "seconds"
+        print "median slew time", np.median(slewTimes), "seconds"
+        plt.hist(slewTimes, bins = np.arange(min(slewTimes), max(slewTimes), 0.5))
+        plt.xlabel("Slew Time (secs)")
+        plt.ylabel("Number of slews")
+        plt.title("Histogram of Slew Times")
+        
+        plt.figure()
+        plt.title("Cumulative sum of slew times")
+        plt.xlabel("Cumulative sum up to the nth fastest slew")
+        plt.ylabel("Cumulative sum (secs)")
+        sortedTimes = np.sort(slewTimes)
+        cum = np.cumsum(sortedTimes)
+        plt.plot(np.arange(len(cum)), cum)
+        print "total cumulative slew time: ", cum[-1]
+        print "rank @ half total cum / # slews", np.searchsorted(cum, cum[-1]/2) / len(cum)
+        
+        revisitTimesMins = np.array(revisitTimes) / 60
+        print "avg revisit time", np.mean(revisitTimesMins), "minutes"
+        plt.figure()
+        plt.hist(revisitTimesMins, 
+                 bins = np.arange(0, 3*np.median(revisitTimesMins), 1))
+        plt.xlabel("Revisit Time (mins)")
+        plt.ylabel("Number of Revisits")
+        plt.title("Histogram of Revisit Times")
 
-                revisitTimesMins = np.array(revisitTimes) / 60
-                print "avg revisit time", np.mean(revisitTimesMins), "minutes"
-                plt.figure()
-                plt.hist(revisitTimesMins, 
-                         bins = np.arange(0, 3*np.median(revisitTimesMins), 1))
-                plt.xlabel("Revisit Time (mins)")
-                plt.ylabel("Number of Revisits")
-                plt.title("Histogram of Revisit Times")
-
-                plt.show()
-                return
+        # show various plots about airmass
+        azes = np.array(azes) % (2*np.pi)
+        showAirmassPlots(plt, zip(alts, azes, obsDecs))
+        #plt.show()
 
     def time(self):
         return self.curTime
