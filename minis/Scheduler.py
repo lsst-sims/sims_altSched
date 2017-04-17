@@ -21,11 +21,11 @@ class Scheduler:
     def __init__(self, context):
         self.context = context
         # or maybe load from .pkl
-        self.ongoingSurvey = OngoingSurvey()
+        self.ongoingSurvey = set()
 
         # these estimates get updated at the end of each night
         # (currently estAvgExpTime is not updated)
-        self.estAvgSlewTime = 5 # seconds
+        self.estAvgSlewTime = 6 # seconds
         self.estAvgExpTime = 30 #seconds
 
         # keep track of how long we spend slewing each night
@@ -180,9 +180,7 @@ class Scheduler:
         visitPair = visit.visitPair
         if visitPair.visit1.isComplete and visitPair.visit2.isComplete:
             # the VisitPair is complete so decrement numIncompleteVisitPairs
-            if visitPair.miniSurvey.numIncompleteVisitPairs <= 0:
-                raise RuntimeError("negative numIncompleteVisitPairs")
-            visitPair.miniSurvey.numIncompleteVisitPairs -= 1
+            self.ongoingSurvey.remove(visitPair)
             northDecRange = self._getDecRange(NORTH)
             if northDecRange[0] <= visitPair.dec <= northDecRange[1]:
                 self.numVisitsPendingInNorth -= 1
@@ -211,29 +209,21 @@ class Scheduler:
         return decRange
 
     def _calculatePendingVisitPairs(self, nightNum, direction):
-        # TODO this method is very slow! Need to run line_profiler 
-        # problem is that miniSurveys are never deleted from ongoingSurvey
-        # and visitPairs are never removed from miniSurveys
-
         # return all the visitPairs in ongoingSurvey which have
         # yet to be completed 
         raRange = self._getNightRaRange(nightNum)
         decRange = self._getDecRange(direction)
 
         visitPairs = set()
-        #print "self.ongoingSurvey.miniSurveys length", len(self.ongoingSurvey.miniSurveys)
-        for miniSurvey in self.ongoingSurvey.miniSurveys:
-            if miniSurvey.numIncompleteVisitPairs > 0:
-                # print "miniSurvey.visitPairs length", len(miniSurvey.visitPairs), miniSurvey.numIncompleteVisitPairs
-                for visitPair in miniSurvey.visitPairs:
-                    if (not visitPair.visit1.isComplete or 
-                        not visitPair.visit2.isComplete):
-                        # note that this means a visit returned by this function
-                        # as pending might already be half-completed.
-                        # schedule() must handle this case
-                        if Utils.isRaInRange(visitPair.ra, raRange) and \
-                           decRange[0] < visitPair.dec < decRange[1]:
-                            visitPairs.add(visitPair)
+        for visitPair in self.ongoingSurvey:
+            if (not visitPair.visit1.isComplete or 
+                not visitPair.visit2.isComplete):
+                # note that this means a visit returned by this function
+                # as pending might already be half-completed.
+                # schedule() must handle this case
+                if Utils.isRaInRange(visitPair.ra, raRange) and \
+                   decRange[0] < visitPair.dec < decRange[1]:
+                    visitPairs.add(visitPair)
         return visitPairs
 
     def _addNewMiniSurvey(self, nightNum, direction):
@@ -245,8 +235,8 @@ class Scheduler:
 
         minDec, maxDec = self._getDecRange(direction)
 
-        newMini = MiniSurvey.newMiniSurvey(minDec, maxDec, raStart, raEnd)
-        numVisitPairs = len(newMini.visitPairs)
+        newVisitPairs = MiniSurvey.newMiniSurvey(minDec, maxDec, raStart, raEnd)
+        numVisitPairs = len(newVisitPairs)
         if direction == NORTH:
             self.numVisitsScheduledInNorth += numVisitPairs
             self.numVisitsPendingInNorth += numVisitPairs
@@ -254,7 +244,7 @@ class Scheduler:
             self.numVisitsScheduledInSouth += numVisitPairs
             self.numVisitsPendingInSouth += numVisitPairs
 
-        self.ongoingSurvey.miniSurveys.append(newMini)
+        self.ongoingSurvey.update(newVisitPairs)
 
     def _generateScans(self, nightNum, visitPairs):
         # partitions the visits into vertical scans

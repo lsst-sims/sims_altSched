@@ -24,16 +24,6 @@ class MiniSurvey:
             raise NotImplementedError("call MiniSurvey.newMiniSurvey() to \
                                        get a new MiniSurvey instance")
 
-        # the VisitPair constructor relies on self.rotation having been
-        # set already. TODO do something that's not this
-        self.rotation = rotation
-
-        self.visitPairs = [VisitPair(self, pointing[0], pointing[1])
-                           for pointing in pointings]
-
-
-        self.numIncompleteVisitPairs = len(self.visitPairs)
-
     @classmethod
     def setLatestRotation(cls, rotation, direction):
         # called when resuming the survey from a checkpoint
@@ -88,8 +78,10 @@ class MiniSurvey:
 
             plt.show()
 
-        newMini = cls(pointings, rotation)
-        return newMini
+        visitPairs = [VisitPair(pointing[0], pointing[1], rotation)
+                      for pointing in pointings]
+
+        return set(visitPairs)
         
 
     @classmethod
