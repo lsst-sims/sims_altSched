@@ -71,6 +71,9 @@ class Simulator:
         i = 0
         prevI = i
         for visit in sched.schedule():
+            if isNightYoung:
+                print "Night:", nightNum, "\r",
+                sys.stdout.flush()
             # if visit is None, that means the scheduler ran out of places
             # to point for the night
             if visit is not None:
@@ -101,9 +104,6 @@ class Simulator:
                 if saveMovie:
                     display.saveFrame("images/pygame/%06d.png" % i)
 
-            if i % 10000 == 0:
-                print i
-
             if visit is None:
                 self.curTime += 30
             else:
@@ -131,8 +131,9 @@ class Simulator:
                 isNightYoung = True
 
             i += 1
-            if i > 30000:
+            if i > 1000000000:
                 print "avg slew time", np.mean(slewTimes), "seconds"
+                print "median slew time", np.median(slewTimes), "seconds"
                 plt.hist(slewTimes, bins = np.arange(min(slewTimes), max(slewTimes), 0.5))
                 plt.xlabel("Slew Time (secs)")
                 plt.ylabel("Number of slews")

@@ -69,6 +69,7 @@ class Scheduler:
             self.estAvgSlewTime = np.mean(self.curNightSlewTimes)
 
     def _scheduleNight(self, nightNum):
+        # decide which way to point for the night
         if (self.numVisitsScheduledInNorth / self.areaInNorth < 
                 self.numVisitsScheduledInSouth / self.areaInSouth):
             direction = NORTH
@@ -240,7 +241,7 @@ class Scheduler:
         # enough pending visits left
 
         (raStart, raEnd) = self._getNightRaRange(nightNum)
-        print "new mini on night", nightNum, "with ra: (", raStart, ",", raEnd, ")"
+        #print "new mini on night", nightNum, "with ra: (", raStart, ",", raEnd, ")"
 
         minDec, maxDec = self._getDecRange(direction)
 
