@@ -82,14 +82,17 @@ def calcSlewTime(altaz1, altaz2):
 
     # if we can fit both exposures in the dome slit, do so
     if deltaAlt**2 + deltaAz**2 < fovWidth**2:
-        domAltSlewTime = domAzSlewTime = 0
+        totDomTime = 0
     else:
-        # else, assume we line up alt in the center of the dome slit so we 
-        # minimize distance we have to travel in azimuth.
+        # else, we take the minimum time from two options:
+        # 1. assume we line up alt in the center of the dome slit so we 
+        #    minimize distance we have to travel in azimuth.
+        # 2. line up az in the center of the slit
         # also assume:
         # * that we start out going maxspeed for both alt and az
         # * that we only just barely have to get the new field in the dome slit
-        #   in the az direction, but that we have to center the field in alt
+        #   in one direction, but that we have to center the field in the other
+        #   (which depends which of the two options used)
         # * that we don't have to slow down until after the shutter starts opening
         domDeltaAlt = deltaAlt
 
@@ -100,6 +103,16 @@ def calcSlewTime(altaz1, altaz2):
         domAltSlewTime = domDeltaAlt / domAltMaxSpeed
         domAzSlewTime  = domDeltaAz  / domAzMaxSpeed
 
+        totDomTime1 = max(domAltSlewTime, domAzSlewTime)
+
+        domDeltaAlt = deltaAlt - 2 * (domSlitDiam/2 - fovWidth/2)
+        domDeltaAz  = deltaAz
+        domAltSlewTime = domDeltaAlt / domAltMaxSpeed
+        domAzSlewTime  = domDeltaAz  / domAzMaxSpeed
+        totDomTime2 = max(domAltSlewTime, domAzSlewTime)
+
+        totDomTime = min(totDomTime1, totDomTime2)
+
     #print "slew alt/az", altSlewTime, azSlewTime
     #print
-    return max(telAltSlewTime, telAzSlewTime, domAltSlewTime, domAzSlewTime) + settleTime
+    return max(telAltSlewTime, telAzSlewTime, totDomTime) + settleTime
