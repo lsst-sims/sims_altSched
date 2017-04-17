@@ -8,6 +8,8 @@ from astropy import units as u
 from datetime import datetime
 
 import Config
+from matplotlib import pyplot as plt
+import time
 
 def nightLength(nightNum):
     return 60 * 60 * 8
@@ -52,6 +54,49 @@ def localSiderialTime(longitude, time):
     localSiderialTime = np.radians(localSiderialTime)
     return localSiderialTime
 
+# precompute HA/dec => alt/az lookup table
+# TODO I expected this lookup table to make radec2altaz much faster, but it
+# only made it marginally faster, if at all. Should look into this with
+# a line profiler at some point
+pi = np.pi
+sin = np.sin
+cos = np.cos
+
+# at this resolution it takes ~0.8sec to compute this lookup table
+# and for points far from singular points in the map, the deviation
+# between adjacent lookup table pixels is <~0.1 degrees
+g_nHAs = 3200
+g_nDecs = 1600
+
+g_HA, g_dec = np.mgrid[0     : 2*pi : 2*pi/g_nHAs,
+                       -pi/2 : pi/2 : pi/g_nDecs]
+
+g_sinDec = sin(g_dec)
+g_sinAlt = g_sinDec * sin(Telescope.latitude) + \
+         cos(g_dec) * cos(Telescope.latitude) * cos(g_HA)
+g_alt = np.arcsin(g_sinAlt)
+
+g_cosA = (g_sinDec - g_sinAlt * sin(Telescope.latitude)) / \
+               (cos(g_alt) * cos(Telescope.latitude))
+g_cosA = np.clip(g_cosA, -1, 1)
+g_a = np.arccos(g_cosA)
+
+g_sinHA = sin(g_HA)
+g_az = g_a
+g_az[g_sinHA >= 0] = 2*pi - g_a[g_sinHA >= 0]
+
+g_altLookup = g_alt
+g_azLookup = g_az
+
+"""
+plt.title("alt")
+plt.imshow(g_altLookup)
+plt.figure()
+plt.title("az")
+plt.imshow(g_azLookup)
+plt.show()
+"""
+
 def radec2altaz(radec, time):
     ra = radec[:,0]
     dec = radec[:,1]
@@ -60,36 +105,35 @@ def radec2altaz(radec, time):
     This is unbelievably inexplicably slow (>~90% runtime), ~15ms/call
     I made a call graph for the program using this method and it called
     a zillion random functions none of which took a significant amount of 
-    time individually...
+    time individually... 
 
     t = datetime.utcfromtimestamp(time)
     altazframe = AltAz(location = Telescope.location, obstime = t)
 
     icrs = ICRS(ra=ra * u.rad, dec=dec * u.rad)
     a = icrs.transform_to(altazframe)
-    astropyResults = np.degrees(np.vstack([a.alt.rad, a.az.rad]).T)
+    astropyResults = np.vstack([a.alt.rad, a.az.rad]).T
+    #return astropyResults
     """
 
     # the method below returns values within ~1 degree of what the astropy
     # code gives (for reasonable dates), and it takes ~30us instead of ~15ms
+    # TODO sometimes they differ by >2 degrees in the north -- this is too much
+    # maybe interpolate? or use higher res lookup?
 
     # formulas from http://www.stargazing.net/kepler/altaz.html
     
     LST = localSiderialTime(Telescope.longitude, time)
-    hourAngle = (LST * np.ones(ra.shape) - ra) % (2*np.pi)
-    sin = np.sin
-    cos = np.cos
-    sinalt = sin(dec) * sin(Telescope.latitude) + \
-             cos(dec) * cos(Telescope.latitude) * cos(hourAngle)
-    alt = np.arcsin(sinalt)
+    HA = (LST * np.ones(ra.shape) - ra) % (2*np.pi)
 
-    cosA = (sin(dec) - sin(alt) * sin(Telescope.latitude)) / \
-                      (cos(alt) * cos(Telescope.latitude))
-    a = np.arccos(cosA)
-    az = a
-    az[sin(hourAngle) >= 0] = 2*np.pi - a[sin(hourAngle) >= 0]
+    HAIndex = (HA / (2*np.pi) * g_nHAs).astype(int)
+    decIndex = ((dec+np.pi/2) / np.pi * g_nDecs).astype(int)
 
-    #print "diff", astropyResults - np.degrees(np.vstack([alt, az]).T)
+    alt = g_altLookup[HAIndex, decIndex]
+    az = g_azLookup[HAIndex, decIndex]
+
+    #diff = np.degrees(astropyResults - np.vstack([alt, az]).T)
+    #print "diff", diff[diff > 0.5]
     return np.vstack([alt, az]).T
 
 
