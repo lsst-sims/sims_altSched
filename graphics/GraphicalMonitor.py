@@ -218,6 +218,8 @@ class GraphicalMonitor:
         self.screen = pygame.display.set_mode((self.xMax - self.xMin, 
                                                self.yMax - self.yMin))
 
+    def clear(self):
+        self.pixValues = np.zeros(self.pixValues.shape)
 
     def addVisit(self, visit):
         self.pendingVisits.append(visit)
@@ -278,6 +280,7 @@ class GraphicalMonitor:
             x *= -1
 
             # TODO rotate depending on the angle of the focal plane wrt the sky
+            # I think I need to add/subtract the parallactic angle?
             # not just the absolute rotation of the visit
             xPupil = x * np.cos(visit.rotation) - y * np.sin(visit.rotation)
             yPupil = x * np.sin(visit.rotation) + y * np.cos(visit.rotation)

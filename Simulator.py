@@ -18,6 +18,8 @@ from testOpsimAltAz import showAirmassPlots
 showDisp = False
 saveMovie = False
 plotAzes = False
+showSummaryPlots = True
+clearDisplayNightly = False
 
 # TODO plot azimuth vs time
 # change filters every revisit set (revisits 1 hour, change every 2 hours)
@@ -134,14 +136,17 @@ class Simulator:
                 self.curTime = AstronomicalSky.nightStart(nightNum + 1)
                 nightNum += 1
                 isNightYoung = True
+                if showDisp and clearDisplayNightly:
+                    display.clear()
 
             i += 1
             if i > 200000:
                 print
                 break
+
         print "avg slew time", np.mean(slewTimes), "seconds"
         print "median slew time", np.median(slewTimes), "seconds"
-        plt.hist(slewTimes, bins = np.arange(min(slewTimes), max(slewTimes), 0.5))
+        plt.hist(slewTimes, bins = np.arange(min(slewTimes), 30, 0.1))
         plt.xlabel("Slew Time (secs)")
         plt.ylabel("Number of slews")
         plt.title("Histogram of Slew Times")
@@ -168,7 +173,8 @@ class Simulator:
         # show various plots about airmass
         azes = np.array(azes) % (2*np.pi)
         showAirmassPlots(plt, zip(alts, azes, obsDecs))
-        #plt.show()
+        if showSummaryPlots:
+            plt.show()
 
     def time(self):
         return self.curTime
