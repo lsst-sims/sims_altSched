@@ -6,8 +6,15 @@ from graphics.GraphicalMonitor import GraphicalMonitor
 import astropy.time
 from minis.Visit import Visit
 from Simulator import Simulator
+import AstronomicalSky
+from testOpsimAltAz import showAirmassPlots
 
 import time
+from matplotlib import pyplot as plt
+import sys
+import numpy as np
+
+showDisp = False
 
 class VisualizeOpsim:
 
@@ -19,12 +26,17 @@ class VisualizeOpsim:
 
 
     def main(self):
-        display = GraphicalMonitor(context=self, imScale=self.imScale)
+        if showDisp:
+            display = GraphicalMonitor(context=self, imScale=self.imScale)
 
         i = 0
         prevI = i
         isNightYoung = True
         prevNightNum = -1
+
+        alts = []
+        azes = []
+        obsDecs = []
 
         for row in self.c.execute("select expMJD, night, ditheredRA, ditheredDEC, visitTime from ObsHistory"):
             mjd = row[0]
@@ -36,22 +48,38 @@ class VisualizeOpsim:
             t = astropy.time.Time(mjd, format="mjd")
             self.curTime = t.unix
 
+            radec = np.array([[ra, dec]])
+            altaz = AstronomicalSky.radec2altaz(radec, self.curTime)
+            alts.append(altaz[0,0])
+            azes.append(altaz[0,1])
+            obsDecs.append(dec)
+
             # no slew time is over an hour
             isNightYoung = nightNum > prevNightNum
+            if isNightYoung:
+                print "Night:", nightNum, "\r",
+                sys.stdout.flush()
 
             visit = Visit(None, ra, dec, 0, expTime)
 
-            display.addVisit(visit)
+            if showDisp:
+                display.addVisit(visit)
 
             perNight, deltaI = Simulator.getUpdateRate(i)
 
-            if (perNight and isNightYoung) or (not perNight and i - prevI >= deltaI):
+            if showDisp and ((perNight and isNightYoung) or 
+                             (not perNight and i - prevI >= deltaI)):
                 display.updateDisplay()
                 display.saveFrame("images/opsim/%07d.png" % i)
                 prevI = i
 
             i += 1
             prevNightNum = nightNum
+            if nightNum > 365:
+                break
+
+        showAirmassPlots(plt, zip(alts, azes, obsDecs))
+        plt.show()
             
 
     def time(self):
