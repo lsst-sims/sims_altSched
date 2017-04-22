@@ -8,6 +8,7 @@ from Visit import VisitPair
 import Config
 import Utils
 from astropy import wcs
+import Scheduler # just for cardinal direction constants
 
 class MiniSurvey:
     NORTH = 0
@@ -19,10 +20,8 @@ class MiniSurvey:
 
     rotationGenerator = RotationGenerator()
 
-    def __init__(self, pointings, rotation):
-        if not isinstance(self, MiniSurvey):
-            raise NotImplementedError("call MiniSurvey.newMiniSurvey() to \
-                                       get a new MiniSurvey instance")
+    def __init__(self):
+        raise NotImplementedError("MiniSurvey is static")
 
     @classmethod
     def setLatestRotation(cls, rotation, direction):
@@ -30,7 +29,7 @@ class MiniSurvey:
         cls.rotationGenerator = RotationGenerator(rotation, direction)
 
     @classmethod
-    def newMiniSurvey(cls, minDec, maxDec, minRa, maxRa):
+    def newMiniSurvey(cls, minRa, maxRa, direction):
         rotation = next(cls.rotationGenerator.rotations())
         #allPointings = cls._generateRandomPointings()
         allPointings = cls._realGeneratePointings()
@@ -57,11 +56,31 @@ class MiniSurvey:
         #print "RA: (", raStart, ",", raEnd, ")"
         #print "DEC: (", decStart, ",", decEnd, ")"
 
-        # this mini survey should only include pointings between ra/dec min/max
-        pointings = allPointings[np.where(
-            Utils.areRasInRange(allPointings[:,0], (minRa, maxRa)) & 
-            (minDec < allPointings[:,1]) & (allPointings[:,1] < maxDec)
-        )]
+        # choose a subset of the pointings to get the desired shape:
+        # i.e. a rectangle in ra/dec space with the sub-rectangle of
+        # latitude \pm zenithBuffer shifted to the East
+        if direction == Scheduler.NORTH:
+            minDec = Telescope.latitude + Config.zenithBuffer
+            maxDec = Config.maxDec
+            # min/maxRa remain unchanged
+        elif direction == Scheduler.SOUTH:
+            minDec = Config.minDec
+            maxDec = Telescope.latitude - Config.zenithBuffer
+            # min/maxRa remain unchanged
+        elif direction == Scheduler.EAST:
+            minDec = Telescope.latitude - Config.zenithBuffer
+            maxDec = Telescope.latitude + Config.zenithBuffer
+            minRa += Config.zenithBuffer + Config.zenithBufferOffset
+            maxRa += Config.zenithBuffer + Config.zenithBufferOffset
+        else:
+            raise ValueError("Invalid direction: " + str(direction))
+
+        validRa = Utils.areRasInRange(allPointings[:,0], (minRa, maxRa))
+        validDec = ((minDec < allPointings[:,1]) &
+                    (maxDec > allPointings[:,1]))
+        validMask = validRa & validDec
+
+        pointings = allPointings[np.where(validMask)]
 
         if len(pointings) > 1000:
             # TODO debug: there shouldn't ever be more than 1000 pointings
