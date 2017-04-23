@@ -7,7 +7,7 @@ import astropy.time
 from minis.Visit import Visit
 from Simulator import Simulator
 import AstronomicalSky
-from testOpsimAltAz import showAirmassPlots
+from SummaryPlots import SummaryPlots
 
 import time
 from matplotlib import pyplot as plt
@@ -38,7 +38,7 @@ class VisualizeOpsim:
         azes = []
         obsDecs = []
 
-        for row in self.c.execute("select expMJD, night, ditheredRA, ditheredDEC, visitTime from ObsHistory"):
+        for row in self.c.execute("select expMJD, night, ditheredRA, ditheredDEC, visitTime from ObsHistory limit 10000"):
             mjd = row[0]
             nightNum = row[1]
             ra = row[2]
@@ -78,8 +78,14 @@ class VisualizeOpsim:
             if nightNum > 365:
                 break
 
-        showAirmassPlots(plt, zip(alts, azes, obsDecs))
-        plt.show()
+        azes = np.array(azes) % (2*np.pi)
+
+        plotter = SummaryPlots(alts=alts, azes=azes, decs=obsDecs)
+        plotter.dAirmassCum()
+        plotter.airmassHist()
+        plotter.dAirmassContour()
+        plotter.zenithAngleContour()
+        plotter.show()
             
 
     def time(self):

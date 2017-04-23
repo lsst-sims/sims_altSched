@@ -12,8 +12,7 @@ import time
 import sys
 
 from matplotlib import pyplot as plt
-
-from testOpsimAltAz import showAirmassPlots
+from SummaryPlots import SummaryPlots
 
 showDisp = False
 saveMovie = False
@@ -140,41 +139,37 @@ class Simulator:
                     display.clear()
 
             i += 1
-            if i > 200000:
+            if i > 20000:
                 print
                 break
 
+
+        if not showSummaryPlots:
+            return
+
+        azes = np.array(azes) % (2*np.pi)
+
+        plotter = SummaryPlots(alts = alts, azes = azes, decs = obsDecs,
+                               slewTimes = slewTimes, revisitTimes = revisitTimes)
+
         print "avg slew time", np.mean(slewTimes), "seconds"
         print "median slew time", np.median(slewTimes), "seconds"
-        plt.hist(slewTimes, bins = np.arange(min(slewTimes), 30, 0.1))
-        plt.xlabel("Slew Time (secs)")
-        plt.ylabel("Number of slews")
-        plt.title("Histogram of Slew Times")
+        plotter.slewHist()
         
-        plt.figure()
-        plt.title("Cumulative sum of slew times")
-        plt.xlabel("Cumulative sum up to the nth fastest slew")
-        plt.ylabel("Cumulative sum (secs)")
         sortedTimes = np.sort(slewTimes)
         cum = np.cumsum(sortedTimes)
-        plt.plot(np.arange(len(cum)), cum)
         print "total cumulative slew time: ", cum[-1]
         print "rank @ half total cum / # slews", np.searchsorted(cum, cum[-1]/2) / len(cum)
+        plotter.slewRankCum()
         
-        revisitTimesMins = np.array(revisitTimes) / 60
-        print "avg revisit time", np.mean(revisitTimesMins), "minutes"
-        plt.figure()
-        plt.hist(revisitTimesMins, 
-                 bins = np.arange(0, 3*np.median(revisitTimesMins), 1))
-        plt.xlabel("Revisit Time (mins)")
-        plt.ylabel("Number of Revisits")
-        plt.title("Histogram of Revisit Times")
+        print "avg revisit time", np.mean(np.array(revisitTimes)/60), "minutes"
+        plotter.revisitHist()
+        
+        plotter.dAirmassCum()
+        plotter.dAirmassContour()
+        plotter.airmassHist()
 
-        # show various plots about airmass
-        azes = np.array(azes) % (2*np.pi)
-        showAirmassPlots(plt, zip(alts, azes, obsDecs))
-        if showSummaryPlots:
-            plt.show()
+        plotter.show()
 
     def time(self):
         return self.curTime
