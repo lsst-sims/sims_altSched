@@ -56,7 +56,7 @@ class Simulator:
         # resScale is proportional to the resolution (and therefore the speed)
         if showDisp:
             skyMap = SkyMap(resScale=6)
-            display = GraphicalMonitor(context=self, skyMap=skyMap)
+            display = GraphicalMonitor(skyMap=skyMap)
        
         nightNum = 0
         isNightYoung = True
@@ -108,7 +108,7 @@ class Simulator:
 
             if showDisp and ((    perNight and isNightYoung) or
                              (not perNight and i - prevI >= deltaI)):
-                display.updateDisplay(skyMap)
+                display.updateDisplay(skyMap, self.curTime)
                 prevI = i
                 if saveMovie:
                     display.saveFrame("images/pygame/%07d.png" % i)

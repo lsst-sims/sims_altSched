@@ -12,8 +12,7 @@ from matplotlib.colors import hsv_to_rgb
 
 class GraphicalMonitor:
 
-    def __init__(self, context, skyMap):
-        self.context = context
+    def __init__(self, skyMap):
         self.pendingVisits = []
 
         # calculate ra_0: the ra of the zenith at Config.surveyStartTime
@@ -70,9 +69,8 @@ class GraphicalMonitor:
 
         self.screen = pygame.display.set_mode(resolution)
 
-    def updateDisplay(self, skyMap):
+    def updateDisplay(self, skyMap, curTime):
         startTime = Config.surveyStartTime
-        curTime = self.context.time()
 
         # skyAngle is how far to rotate the sky to the right, so we
         # need it to be 2pi - meridian since the ra of the meridian
