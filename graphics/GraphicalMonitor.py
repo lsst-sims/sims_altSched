@@ -219,6 +219,9 @@ class GraphicalMonitor:
                                                self.yMax - self.yMin))
 
     def clear(self):
+        # clear pending visits
+        self.pendingVisits = []
+        # clear pixValues
         self.pixValues = np.zeros(self.pixValues.shape)
 
     def addVisit(self, visit):
