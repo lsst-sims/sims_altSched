@@ -8,6 +8,7 @@ from minis.Scheduler import Scheduler
 import Config
 import AstronomicalSky
 import Telescope
+from minis.SkyMap import SkyMap
 import time
 import sys
 
@@ -46,14 +47,16 @@ class Simulator:
         if 50000 <= i:
             perNight = True
 
+        return (False, 1)
         return (perNight, deltaI)
 
     def run(self):
         sched = Scheduler(context=self)
 
-        # imScale is the resolution (and therefore the speed) that we want
+        # resScale is proportional to the resolution (and therefore the speed)
         if showDisp:
-            display = GraphicalMonitor(context=self, imScale=5, numVisitsDisplayed=None)
+            skyMap = SkyMap(resScale=6)
+            display = GraphicalMonitor(context=self, skyMap=skyMap)
        
         nightNum = 0
         isNightYoung = True
@@ -93,7 +96,7 @@ class Simulator:
 
                 # notify the display of the visit
                 if showDisp:
-                    display.addVisit(visit) 
+                    skyMap.addVisit(visit, self.curTime)
 
             # plot the azimuth at each time step
             if plotAzes:
@@ -105,10 +108,10 @@ class Simulator:
 
             if showDisp and ((    perNight and isNightYoung) or
                              (not perNight and i - prevI >= deltaI)):
-                display.updateDisplay()
+                display.updateDisplay(skyMap)
                 prevI = i
                 if saveMovie:
-                    display.saveFrame("images/pygame/%06d.png" % i)
+                    display.saveFrame("images/pygame/%07d.png" % i)
 
             if visit is None:
                 self.curTime += 30
@@ -136,7 +139,7 @@ class Simulator:
                 nightNum += 1
                 isNightYoung = True
                 if showDisp and clearDisplayNightly:
-                    display.clear()
+                    skyMap.clear()
 
             i += 1
             if i > 20000:
