@@ -49,10 +49,11 @@ class Simulator:
         if 50000 <= i:
             perNight = True
 
-        return (False, 1)
+        return (True, 1)
         return (perNight, deltaI)
 
     def run(self, tel):
+        totalNVisits = 0
         sched = Scheduler(telescope=tel, context=self)
 
         # resScale is proportional to the resolution (and therefore the speed)
@@ -97,6 +98,7 @@ class Simulator:
             # if visit is None, that means the scheduler ran out of places
             # to point for the night
             if visit is not None:
+                totalNVisits += 1
                 # keep track of the alt and az of each visit
                 radec = np.array([[visit.ra, visit.dec]])
                 obsDecs.append(visit.dec)
@@ -145,8 +147,7 @@ class Simulator:
                 isNightYoung = True
 
             i += 1
-            if i > 20000:
-                print
+            if nightNum > (365/12):
                 break
 
         avgRevisitTimes = skyMap.getAvgRevisitMap()
@@ -198,6 +199,52 @@ class Simulator:
     def time(self):
         return self.curTime
 
-if __name__ == "__main__":
+def runSimWorker(tel):
     sim = Simulator()
-    sim.run()
+    return sim.run(tel)
+
+def runDefaultSim():
+    sim = Simulator()
+    # use a telescope with default parameters
+    tel = Telescope()
+    return sim.run(tel)
+
+if __name__ == "__main__":
+    runDefaultSim()
+    exit()
+    domAzMaxSpeed = 1.5
+    domAzMaxSpeeds = np.arange(1.5, 2.1, 0.1)
+    domAltMaxSpeeds = np.arange(1.75, 4, 0.25)
+    domAltMaxSpeed = 1.75
+    #domAltMaxSpeeds = np.arange(1.75, 2.25, 0.25)
+    settleTimes = np.arange(2.8,3.1,0.1)
+    #settleTimes = np.arange(2.5,3,0.25)
+    results = np.zeros((len(domAzMaxSpeeds), len(settleTimes)))
+    print
+    print "tot:", len(domAzMaxSpeeds)
+    print
+    for i, domAzMaxSpeed in enumerate(domAzMaxSpeeds):
+        print
+        print "i:", i
+        print
+        p = Pool(8)
+        tels = [Telescope() for settleTime in settleTimes]
+        for tel, settleTime in zip(tels, settleTimes):
+            tel.domAltMaxSpeed = domAltMaxSpeed
+            tel.domAzMaxSpeed = domAzMaxSpeed
+            tel.settleTime = settleTime
+        row = p.map(runSimWorker, tels)
+        results[-i-1,:] = row
+        #for j, settleTime in enumerate(settleTimes):
+        #    sim = Simulator()
+        #    results[-i-1, j] = sim.run(domAltMaxSpeed, domAzMaxSpeed, settleTime)
+    print results.tolist()
+    plt.matshow(results, extent=[settleTimes.min(), settleTimes.max(), domAzMaxSpeeds.min(), domAzMaxSpeeds.max()])
+    ax = plt.gca()
+    ax.set_xticks(settleTimes[::5])
+    ax.set_yticks(domAzMaxSpeeds[::5])
+    plt.colorbar()
+    plt.title("Total Number of Visits (six-month sims)")
+    plt.xlabel("Settle Time (secs)")
+    plt.ylabel("Dome Azimuth Max Speed (deg/sec)")
+    plt.show()
