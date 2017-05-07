@@ -82,6 +82,15 @@ class Simulator:
         i = 0
         prevI = i
         for visit in sched.schedule():
+
+            perNight, deltaI = self.getUpdateRate(i)
+            if showDisp and ((    perNight and isNightYoung) or
+                             (not perNight and i - prevI >= deltaI)):
+                display.updateDisplay(skyMap, self.curTime)
+                prevI = i
+                if saveMovie:
+                    display.saveFrame("images/pygame/%07d.png" % i)
+
             if isNightYoung:
                 print "Night:", nightNum, "\r",
                 sys.stdout.flush()
@@ -107,15 +116,6 @@ class Simulator:
                 plt.draw()
                 plt.pause(0.01)
 
-            perNight, deltaI = self.getUpdateRate(i)
-
-            if showDisp and ((    perNight and isNightYoung) or
-                             (not perNight and i - prevI >= deltaI)):
-                display.updateDisplay(skyMap, self.curTime)
-                prevI = i
-                if saveMovie:
-                    display.saveFrame("images/pygame/%07d.png" % i)
-
             if visit is None:
                 self.curTime += 30
             else:
@@ -134,6 +134,8 @@ class Simulator:
                                                visitPair.visit2.timeOfCompletion))
                 prevAltaz = altaz
 
+            if isNightYoung and showDisp and clearDisplayNightly:
+                skyMap.clear()
             # process the end of the night if necessary
             if self.curTime < AstronomicalSky.nightEnd(nightNum):
                 isNightYoung = False
