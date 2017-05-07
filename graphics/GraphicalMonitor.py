@@ -79,7 +79,10 @@ class GraphicalMonitor:
         # increases with time
         skyAngle = 2*np.pi - AstronomicalSky.raOfMeridian(curTime - startTime)
 
-        imdata = skyMap.get2DMap(skyAngle)
+        nVisitsMap = skyMap.getNVisitsMap(skyAngle)
+        imdata = nVisitsMap
+        if np.max(nVisitsMap) > 0:
+            imdata = imdata / np.max(nVisitsMap)
 
         # 240/360 was chosen so we go from blue to red
         hue = (((240 - imdata * 240) / 360) * 255).astype(int).transpose()

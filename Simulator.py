@@ -143,14 +143,30 @@ class Simulator:
                 self.curTime = AstronomicalSky.nightStart(nightNum + 1)
                 nightNum += 1
                 isNightYoung = True
-                if showDisp and clearDisplayNightly:
-                    skyMap.clear()
 
             i += 1
             if i > 20000:
                 print
                 break
 
+        avgRevisitTimes = skyMap.getAvgRevisitMap()
+        plt.figure("revisit times")
+        plt.title("Average Revisit Times (in minutes)")
+        plt.imshow(avgRevisitTimes/60)
+        plt.colorbar()
+
+        revisitTimesMap = skyMap.getRevisitMap()
+        allRevisitTimes = []
+        for pix in revisitTimesMap.flatten():
+            # some entries might be zeros
+            if isinstance(pix, list):
+                allRevisitTimes += pix
+        plt.figure("Revisit Time Histogram")
+        plt.hist(np.array(allRevisitTimes)/3600, 300, cumulative=True, normed=True, range=[0,2])
+        plt.title("Per-Pixel Revisit Times")
+        plt.xlabel("Time (hours)")
+        plt.ylabel("Cumulative number of visits (normalized)")
+        plt.show()
 
         if not showSummaryPlots:
             return

@@ -137,6 +137,10 @@ class SkyMap:
                                    for i in range(self.yMax - self.yMin)]
         self.rowLengthsCumSum = np.array(self.rowLengthsCumSum)
 
+        # variables to keep track of summary statistics
+        self.previousVisitTimes = np.nan * np.ones(self.pixValues.shape)
+        self.revisitTimes = [[] for i in range(len(self.pixValues))]
+
     def getResolution(self):
         return (self.xMax - self.xMin, self.yMax - self.yMin)
  
@@ -222,10 +226,20 @@ class SkyMap:
         coveredPixIds = candidatePixIds[arePixCovered(pupilCoords[:,0],
                                                       pupilCoords[:,1])]
         self.pixValues[coveredPixIds] += 1
+        for coveredPixId in coveredPixIds:
+            revisitTime = time - self.previousVisitTimes[coveredPixId]
+            # if the last visit was > 4 months ago, the field must have
+            # just risen for the year, so don't count that
+            if not np.isnan(revisitTime) and revisitTime < 3600 * 24 * 30 * 4:
+                self.revisitTimes[coveredPixId].append(revisitTime)
+        self.previousVisitTimes[coveredPixIds] = time
 
-    def get2DMap(self, skyAngle):
-        # this array will hold the 2D, rotated image
-        imdata = np.zeros((self.yMax - self.yMin, self.xMax - self.xMin))
+
+    def _get2DMap(self, vals, skyAngle):
+        # returns a 2D map of vals rotated by skyAngle
+
+        # this array will hold the 2D, rotated map
+        valMap = np.zeros((self.yMax - self.yMin, self.xMax - self.xMin), dtype=vals.dtype)
 
         # the mollweide projection has increasing RA to the right
         # which means that we're looking at the front of the celestial
@@ -235,17 +249,17 @@ class SkyMap:
 
         pixMvmtRatio = skyAngle / (2*np.pi)
             
-        # keep track of where in pixValues the start of the current row is
+        # keep track of where in vals the start of the current row is
         rowStartProjPixId = 0
         for y in xrange(self.yMin, self.yMax):
             # y is the y coordinate in the image (so yMax is the top row)
 
-            # iy is the y index into imdata (so 0 is the top row)
+            # iy is the y index into valMap (so 0 is the top row)
             iy = (self.yMax - 1) - y
 
             rowLen = self.rowLengths[y]
 
-            # these are indices into imdata[y], not into pixvalues
+            # these are indices into valMap[y], not into pixvalues
             rowStart = int((self.xMax - self.xMin - rowLen) / 2)
             rowEnd = rowStart + rowLen
 
@@ -258,20 +272,35 @@ class SkyMap:
             # TODO I got an error here once:
             # "could not broadcast input array from shape (0) into shape (662)"
             # around day 125
-            imdata[iy, rowStart:rowStart + numPixMoved] = \
-                    self.pixValues[rowStartProjPixId + rowLen - numPixMoved : \
-                                   rowStartProjPixId + rowLen]
+            valMap[iy, rowStart:rowStart + numPixMoved] = \
+                    vals[rowStartProjPixId + rowLen - numPixMoved : \
+                         rowStartProjPixId + rowLen]
 
             # then handle the rest of the pixels 
-            imdata[iy, rowStart + numPixMoved:rowStart + rowLen] = \
-                    self.pixValues[rowStartProjPixId: \
-                                   rowStartProjPixId + rowLen - numPixMoved]
+            valMap[iy, rowStart + numPixMoved:rowStart + rowLen] = \
+                    vals[rowStartProjPixId: \
+                         rowStartProjPixId + rowLen - numPixMoved]
 
             # keep track of where in pixValues the next row starts
             rowStartProjPixId += rowLen
 
-        #print np.max(self.pixValues)
-        imdata /= np.max(self.pixValues)
+        return valMap
 
-        return imdata
+    def getNVisitsMap(self, skyAngle):
+        nVisitsMap = self._get2DMap(self.pixValues, skyAngle)
+        return nVisitsMap
+
+    def getRevisitMap(self):
+        # np.array(self.revisitTimes) will hopefully return a 1-D
+        # numpy array of lists and not a 2D array of floats. The only way
+        # this could go wrong is if all the lists in revisitTimes happen
+        # to be the same, which seems exceedingly unlikely
+        return self._get2DMap(np.array(self.revisitTimes), 0)
+
+    def getAvgRevisitMap(self):
+        avgRevisitTimes = np.zeros(len(self.revisitTimes))
+        for i, pix in enumerate(self.revisitTimes):
+            if len(pix) > 0:
+                avgRevisitTimes[i] = np.mean(pix)
+        return self._get2DMap(avgRevisitTimes, 0)
 
