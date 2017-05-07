@@ -83,7 +83,8 @@ class SkyMap:
 
         return rowStarts + offsets
 
-    def __init__(self, resScale):
+    def __init__(self, telescope, resScale):
+        self.telescope = telescope
         self.resScale = resScale 
         # create a WCS object to do the transforms from the sphere to the
         # Mollweide projection
@@ -118,16 +119,12 @@ class SkyMap:
         projPixReversed = np.vstack([projPix[:,1], projPix[:,0]]).T
         self.skyPix = self.w.wcs_pix2world(projPixReversed / resScale, 1)
         self.skyPix = np.radians(self.skyPix)
-        print "skyPix", self.skyPix
-
 
         # take out pixels that are in the projection rectangle but
         # don't actually represent places on the sky (i.e. pixels in the corners)
         validMask = ~np.any(np.isnan(self.skyPix), axis=1)
         projPix = projPix[validMask]
-        print "projPix", projPix.shape
         self.skyPix = self.skyPix[validMask]
-        print "self.skyPix[validMask]", self.skyPix, self.skyPix.shape
 
         # store the number of visits to each pixel in pixValues
         self.pixValues = np.zeros(len(self.skyPix))
@@ -149,7 +146,7 @@ class SkyMap:
 
     def addVisit(self, visit, time):
         # edgeOfFov should be the radius of a circle that includes all of the fov
-        edgeOfFov = Utils.spherical2Cartesian(0, 1.5 * Telescope.fovWidth / 2)
+        edgeOfFov = Utils.spherical2Cartesian(0, 1.5 * self.telescope.fovWidth / 2)
         r = np.linalg.norm(np.array([1,0,0]) - np.array(edgeOfFov))
 
         # get a list of all pixels which might lie on the focal plane

@@ -7,15 +7,17 @@ import numpy as np
 from minis.Scheduler import Scheduler
 import Config
 import AstronomicalSky
-import Telescope
+from Telescope import Telescope
 from minis.SkyMap import SkyMap
 import time
 import sys
+from multiprocessing import Pool
 
 from matplotlib import pyplot as plt
 from SummaryPlots import SummaryPlots
 
-showDisp = False
+trackMap = True
+showDisp = True
 saveMovie = False
 plotAzes = False
 showSummaryPlots = True
@@ -50,12 +52,13 @@ class Simulator:
         return (False, 1)
         return (perNight, deltaI)
 
-    def run(self):
-        sched = Scheduler(context=self)
+    def run(self, tel):
+        sched = Scheduler(telescope=tel, context=self)
 
         # resScale is proportional to the resolution (and therefore the speed)
+        if trackMap:
+            skyMap = SkyMap(telescope=tel, resScale=2)
         if showDisp:
-            skyMap = SkyMap(resScale=6)
             display = GraphicalMonitor(skyMap=skyMap)
        
         nightNum = 0
@@ -92,10 +95,10 @@ class Simulator:
                 alts.append(altaz[0])
                 azes.append(altaz[1])
                 if not isNightYoung:
-                    slewTime = Telescope.calcSlewTime(prevAltaz, altaz)
+                    slewTime = tel.calcSlewTime(prevAltaz, altaz)
 
                 # notify the display of the visit
-                if showDisp:
+                if trackMap:
                     skyMap.addVisit(visit, self.curTime)
 
             # plot the azimuth at each time step

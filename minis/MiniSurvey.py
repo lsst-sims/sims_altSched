@@ -1,6 +1,6 @@
 from  __future__ import division
 import numpy as  np
-import Telescope
+from Telescope import Telescope
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from RotationGenerator import RotationGenerator
@@ -29,10 +29,10 @@ class MiniSurvey:
         cls.rotationGenerator = RotationGenerator(rotation, direction)
 
     @classmethod
-    def newMiniSurvey(cls, minRa, maxRa, direction):
-        rotation = next(cls.rotationGenerator.rotations())
-        #allPointings = cls._generateRandomPointings()
-        allPointings = cls._realGeneratePointings()
+    def newMiniSurvey(cls, telescope, minRa, maxRa, direction):
+        rotation = next(cls.rotationGenerator.rotations(telescope))
+        #allPointings = cls._generateRandomPointings(telescope)
+        allPointings = cls._realGeneratePointings(telescope)
 
         # now take the pointings and rotate them around the z and x
         # axes so they are randomly dithered on the sphere
@@ -60,16 +60,16 @@ class MiniSurvey:
         # i.e. a rectangle in ra/dec space with the sub-rectangle of
         # latitude \pm zenithBuffer shifted to the East
         if direction == Scheduler.NORTH:
-            minDec = Telescope.latitude + Config.zenithBuffer
+            minDec = telescope.latitude + Config.zenithBuffer
             maxDec = Config.maxDec
             # min/maxRa remain unchanged
         elif direction == Scheduler.SOUTH:
             minDec = Config.minDec
-            maxDec = Telescope.latitude - Config.zenithBuffer
+            maxDec = telescope.latitude - Config.zenithBuffer
             # min/maxRa remain unchanged
         elif direction == Scheduler.EAST:
-            minDec = Telescope.latitude - Config.zenithBuffer
-            maxDec = Telescope.latitude + Config.zenithBuffer
+            minDec = telescope.latitude - Config.zenithBuffer
+            maxDec = telescope.latitude + Config.zenithBuffer
             minRa += Config.zenithBuffer + Config.zenithBufferOffset
             maxRa += Config.zenithBuffer + Config.zenithBufferOffset
         else:
@@ -104,8 +104,8 @@ class MiniSurvey:
         
 
     @classmethod
-    def _generateRandomPointings(self):
-        numPointings = int(4 * np.pi / (Telescope.fovWidth**2))
+    def _generateRandomPointings(self, telescope):
+        numPointings = int(4 * np.pi / (telescope.fovWidth**2))
         thetas = np.arcsin(np.random.random(numPointings)*2 - 1)
         phis = np.random.random(numPointings)*2*np.pi
 
@@ -114,7 +114,7 @@ class MiniSurvey:
 
 
     @classmethod
-    def _realGeneratePointings(self):
+    def _realGeneratePointings(self, telescope):
         # to generate the pointings, start with the pointing pattern in flat
         # space, then map the pattern onto a quadrilateralized spherical cube
 
@@ -133,15 +133,15 @@ class MiniSurvey:
         # I'm guessing there's a better way to do this, but here goes...
 
         cubeSideLength = np.arccos(1/3) # in radians
-        numRaftsPerCubeSide = int(cubeSideLength / Telescope.raftWidth)
+        numRaftsPerCubeSide = int(cubeSideLength / telescope.raftWidth)
 
         minU = 0
         minV = 0
 
         # we need to tile enough to be sure that we can completely cover
         # the unfolded cube with the pattern
-        #maxU = int(2 * np.pi / Telescope.raftWidth)
-        #maxV = int(np.pi / Telescope.raftWidth)
+        #maxU = int(2 * np.pi / telescope.raftWidth)
+        #maxV = int(np.pi / telescope.raftWidth)
 
         # if you unfold the cube like this:
         #  _

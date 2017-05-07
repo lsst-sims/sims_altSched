@@ -1,6 +1,6 @@
 from __future__ import division
 import numpy as np
-import Telescope
+from Telescope import latitude, longitude
 from astropy.coordinates import AltAz
 from astropy.coordinates import EarthLocation
 from astropy.coordinates import ICRS
@@ -72,12 +72,12 @@ g_HA, g_dec = np.mgrid[0     : 2*pi : 2*pi/g_nHAs,
                        -pi/2 : pi/2 : pi/g_nDecs]
 
 g_sinDec = sin(g_dec)
-g_sinAlt = g_sinDec * sin(Telescope.latitude) + \
-         cos(g_dec) * cos(Telescope.latitude) * cos(g_HA)
+g_sinAlt = g_sinDec * sin(latitude) + \
+         cos(g_dec) * cos(latitude) * cos(g_HA)
 g_alt = np.arcsin(g_sinAlt)
 
-g_cosA = (g_sinDec - g_sinAlt * sin(Telescope.latitude)) / \
-               (cos(g_alt) * cos(Telescope.latitude))
+g_cosA = (g_sinDec - g_sinAlt * sin(latitude)) / \
+               (cos(g_alt) * cos(latitude))
 g_cosA = np.clip(g_cosA, -1, 1)
 g_a = np.arccos(g_cosA)
 
@@ -123,7 +123,7 @@ def radec2altaz(radec, time):
 
     # formulas from http://www.stargazing.net/kepler/altaz.html
     
-    LST = localSiderialTime(Telescope.longitude, time)
+    LST = localSiderialTime(longitude, time)
     HA = (LST * np.ones(ra.shape) - ra) % (2*np.pi)
 
     HAIndex = (HA / (2*np.pi) * g_nHAs).astype(int)
@@ -151,10 +151,10 @@ def altaz2radec(altaz, time):
 
     # formulas from http://star-www.st-and.ac.uk/~fv/webnotes/chapter7.htm
     
-    LST = localSiderialTime(Telescope.longitude, time)
+    LST = localSiderialTime(longitude, time)
     sin = np.sin
     cos = np.cos
-    lat = Telescope.latitude
+    lat = latitude
     sinDec = sin(alt) * sin(lat) + cos(alt) * cos(lat) * cos(az)
     dec = np.arcsin(sinDec)
     sinHourAngle = -1 * sin(az) * cos(alt) / cos(dec)

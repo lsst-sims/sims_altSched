@@ -24,7 +24,8 @@ WEST = 3
 SOUTHEAST = 4
 
 class Scheduler:
-    def __init__(self, context):
+    def __init__(self, telescope, context):
+        self.telescope = telescope
         self.context = context
         # or maybe load from .pkl
         self.ongoingSurvey = set()
@@ -42,13 +43,13 @@ class Scheduler:
         # = 2\pi (\sin(dec2) - \sin(dec1)) 
         buf = Config.zenithBuffer
         self.areaInNorth = 2*np.pi*(np.sin(Config.maxDec) - \
-                                    np.sin(Telescope.latitude + buf))
+                                    np.sin(self.telescope.latitude + buf))
 
         # similar for south and east
-        self.areaInSouth = 2*np.pi*(np.sin(Telescope.latitude - buf) -
+        self.areaInSouth = 2*np.pi*(np.sin(self.telescope.latitude - buf) -
                                     np.sin(Config.minDec))
-        self.areaInEast  = 2*np.pi*(np.sin(Telescope.latitude + buf) -
-                                    np.sin(Telescope.latitude - buf))
+        self.areaInEast  = 2*np.pi*(np.sin(self.telescope.latitude + buf) -
+                                    np.sin(self.telescope.latitude - buf))
 
         # keep track of how many visits have been executed in each direction
         self.SVisitsComplete = 0
@@ -66,7 +67,7 @@ class Scheduler:
                 radec = np.array([[visit.ra, visit.dec]])
                 altaz = AstronomicalSky.radec2altaz(radec, self.context.time())[0]
                 if prevAltaz is not None:
-                    slewTime = Telescope.calcSlewTime(prevAltaz, altaz)
+                    slewTime = self.telescope.calcSlewTime(prevAltaz, altaz)
                     self.curNightSlewTimes.append(slewTime)
                 prevAltaz = altaz
                 yield visit
@@ -329,9 +330,9 @@ class Scheduler:
         if dec > Config.maxDec or dec < Config.minDec:
             raise ValueError("Provided dec of " + str(dec) + " is outside " + \
                              "of the survey area.")
-        if dec > Telescope.latitude + Config.zenithBuffer:
+        if dec > self.telescope.latitude + Config.zenithBuffer:
             return NORTH
-        elif dec > Telescope.latitude - Config.zenithBuffer:
+        elif dec > self.telescope.latitude - Config.zenithBuffer:
             return EAST
         else:
             return SOUTH
@@ -363,7 +364,7 @@ class Scheduler:
         (raStart, raEnd) = self._getNightRaRange(nightNum)
         #print "new mini on night", nightNum, "with ra: (", raStart, ",", raEnd, ")"
 
-        newVisitPairs = MiniSurvey.newMiniSurvey(raStart, raEnd, direction)
+        newVisitPairs = MiniSurvey.newMiniSurvey(self.telescope, raStart, raEnd, direction)
         self.ongoingSurvey.update(newVisitPairs)
 
     def _generateScans(self, nightNum, visitPairs, direction):
@@ -424,8 +425,8 @@ class Scheduler:
             def assignScans(minRa, maxRa, isNorth):
                 scan = [v for v in visitPairs 
                         if Utils.isRaInRange(v.ra, (minRa, maxRa)) and
-                         ( (v.dec > Telescope.latitude and isNorth) or
-                           (v.dec < Telescope.latitude and not isNorth) )]
+                         ( (v.dec > self.telescope.latitude and isNorth) or
+                           (v.dec < self.telescope.latitude and not isNorth) )]
                 return set(scan)
             scans = [assignScans(ra0, ra1, True),
                      assignScans(ra0, ra1, False),
@@ -461,7 +462,7 @@ class Scheduler:
             # vertical distance between pointings in a scan unless we're
             # very behind in one part of the sky
             # TODO decide how wide to make scans
-            scanWidth = 2 * Telescope.fovWidth
+            scanWidth = 2 * self.telescope.fovWidth
             # mod by 2pi in case raMax < raMin (if the range crosses ra=2pi)
             numScans = ((raMax - raMin) % (2*np.pi)) / scanWidth
             numScans = int(numScans)

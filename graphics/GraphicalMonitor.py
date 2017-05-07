@@ -2,7 +2,7 @@ from __future__ import division
 
 import numpy as np
 
-import Telescope
+from Telescope import Telescope
 import AstronomicalSky
 import Config
 from minis.SkyMap import SkyMap
@@ -44,9 +44,11 @@ class GraphicalMonitor:
         airmassContourAltaz = np.vstack([airmassContourAlt, airmassContourAz]).T
         self.airmassContour = skyMap.altaz2imdata(airmassContourAltaz)
         
+        telescope = Telescope()
+
         # calculate a contour in imdata representing the zenith avoidance zone
         zenithAvoidAz = np.linspace(0, 2 * np.pi, num=30*contourResolution)
-        zenithAvoidAlt = Telescope.maxAlt * np.ones(zenithAvoidAz.shape)
+        zenithAvoidAlt = telescope.maxAlt * np.ones(zenithAvoidAz.shape)
         zenithAvoidAltaz = np.vstack([zenithAvoidAlt, zenithAvoidAz]).T
         self.zenithAvoidContour = skyMap.altaz2imdata(zenithAvoidAltaz)
 

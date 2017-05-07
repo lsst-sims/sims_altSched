@@ -1,15 +1,14 @@
 from __future__ import division
 import numpy as np
-import Telescope
 
 class RotationGenerator:
     def __init__(self, initialValue=-np.pi/2, initialDirection=1):
         self.value = initialValue
         self.direction = initialDirection
 
-    def rotations(self):
-        minimum = Telescope.minRotation
-        maximum = Telescope.maxRotation
+    def rotations(self, telescope):
+        minimum = telescope.minRotation
+        maximum = telescope.maxRotation
 
         # don't use a random rotation for each mini because then we'll
         # get long rotational slew times
