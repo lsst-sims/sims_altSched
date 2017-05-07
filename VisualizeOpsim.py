@@ -10,6 +10,8 @@ import AstronomicalSky
 from SummaryPlots import SummaryPlots
 from minis.SkyMap import SkyMap
 
+from Telescope import Telescope
+
 import time
 from matplotlib import pyplot as plt
 import sys
@@ -28,8 +30,9 @@ class VisualizeOpsim:
 
 
     def main(self):
+        tel = Telescope()
         if showDisp:
-            skyMap = SkyMap(resScale=2)
+            skyMap = SkyMap(telescope = tel, resScale=2)
             display = GraphicalMonitor(skyMap=skyMap)
 
         i = 0
@@ -60,8 +63,6 @@ class VisualizeOpsim:
             # no slew time is over an hour
             isNightYoung = nightNum > prevNightNum
             if isNightYoung:
-                if showDisp and clearDisplayNightly:
-                    skyMap.clear()
                 print "Night:", nightNum, "\r",
                 sys.stdout.flush()
 
@@ -75,9 +76,11 @@ class VisualizeOpsim:
             if showDisp and ((perNight and isNightYoung) or 
                              (not perNight and i - prevI >= deltaI)):
                 display.updateDisplay(skyMap, self.curTime)
-                display.saveFrame("images/opsim/%07d.png" % i)
+                #display.saveFrame("images/opsim/%07d.png" % i)
                 prevI = i
 
+            if isNightYoung and showDisp and clearDisplayNightly:
+                skyMap.clear()
             i += 1
             prevNightNum = nightNum
             if nightNum > 30:
