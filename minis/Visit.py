@@ -18,13 +18,14 @@ class VisitPair:
 
 class Visit:
     # TODO ExpParams?
-    def __init__(self, visitPair, ra, dec, rotation, expTime):
+    def __init__(self, visitPair, ra, dec, rotation, expTime, filter=None):
         self.visitPair = visitPair
 
         self.ra = ra
         self.dec = dec
         self.rotation = rotation
         self.expTime = expTime
+        self.filter = filter
 
         self.isComplete = False
         self.timeOfCompletion = 0

@@ -10,6 +10,7 @@ import Telescope
 import Utils
 
 from matplotlib import pyplot as plt
+import copy
 
 
 # add a new mini-survey whenever we dip below this much times
@@ -76,6 +77,12 @@ class Scheduler:
             self.estAvgSlewTime = np.mean(self.curNightSlewTimes)
 
     def _scheduleNight(self, nightNum):
+        # decide which filters to use for the night
+        leftOut = nightNum % len(self.telescope.filters)
+        nightsFilters = copy.deepcopy(self.telescope.filters)
+        del nightsFilters[leftOut]
+        nightsFilters = np.array(nightsFilters)
+
         # decide which way to point to start out the night
         NCoverage = self.NVisitsComplete / self.areaInNorth
         SCoverage = self.SVisitsComplete / self.areaInSouth
@@ -222,7 +229,8 @@ class Scheduler:
                 raise RuntimeWarning("j=" + str(j) + "!")
 
 
-        for scan, scanDir in zip(scans, scanDirs):
+        for scan, scanDir, filterId in zip(scans, scanDirs, np.arange(len(scans))):
+            filter = nightsFilters[int(filterId / 2) % len(nightsFilters)]
             if scanDir == NORTH:
                 sortedScan = sorted(scan, key=lambda v: v.dec)
             elif scanDir == SOUTH:
@@ -235,11 +243,11 @@ class Scheduler:
                 raise RuntimeError("invalid direction " + str(scanDir))
 
     
-            for visit in self._schedulePath(sortedScan, nightNum):
+            for visit in self._schedulePath(sortedScan, nightNum, filter):
                 yield visit
 
 
-    def _schedulePath(self, path, nightNum):
+    def _schedulePath(self, path, nightNum, filter):
         for visitPair in path:
 
             """
@@ -270,9 +278,11 @@ class Scheduler:
 
             if not visitPair.visit1.isComplete:
                 visitPair.visit1.expTime = expTime
+                visitPair.visit1.filter = filter
                 yield visitPair.visit1
             else:
                 visitPair.visit2.expTime = expTime
+                visitPair.visit2.filter = filter
                 yield visitPair.visit2
 
     def notifyVisitComplete(self, visit, time):
