@@ -8,13 +8,15 @@ from minis.Visit import Visit
 from Simulator import Simulator
 import AstronomicalSky
 from SummaryPlots import SummaryPlots
+from minis.SkyMap import SkyMap
 
 import time
 from matplotlib import pyplot as plt
 import sys
 import numpy as np
 
-showDisp = False
+showDisp = True
+clearDisplayNightly = True
 
 class VisualizeOpsim:
 
@@ -27,7 +29,8 @@ class VisualizeOpsim:
 
     def main(self):
         if showDisp:
-            display = GraphicalMonitor(context=self, imScale=self.imScale)
+            skyMap = SkyMap(resScale=2)
+            display = GraphicalMonitor(skyMap=skyMap)
 
         i = 0
         prevI = i
@@ -38,7 +41,7 @@ class VisualizeOpsim:
         azes = []
         obsDecs = []
 
-        for row in self.c.execute("select expMJD, night, ditheredRA, ditheredDEC, visitTime from ObsHistory limit 10000"):
+        for row in self.c.execute("select expMJD, night, ditheredRA, ditheredDEC, visitTime from ObsHistory"):
             mjd = row[0]
             nightNum = row[1]
             ra = row[2]
@@ -57,26 +60,40 @@ class VisualizeOpsim:
             # no slew time is over an hour
             isNightYoung = nightNum > prevNightNum
             if isNightYoung:
+                if showDisp and clearDisplayNightly:
+                    skyMap.clear()
                 print "Night:", nightNum, "\r",
                 sys.stdout.flush()
 
             visit = Visit(None, ra, dec, 0, expTime)
 
             if showDisp:
-                display.addVisit(visit)
+                skyMap.addVisit(visit, self.curTime)
 
             perNight, deltaI = Simulator.getUpdateRate(i)
 
             if showDisp and ((perNight and isNightYoung) or 
                              (not perNight and i - prevI >= deltaI)):
-                display.updateDisplay()
+                display.updateDisplay(skyMap, self.curTime)
                 display.saveFrame("images/opsim/%07d.png" % i)
                 prevI = i
 
             i += 1
             prevNightNum = nightNum
-            if nightNum > 365:
+            if nightNum > 30:
                 break
+
+        revisitTimesMap = skyMap.getRevisitMap()
+        allRevisitTimes = []
+        for pix in revisitTimesMap.flatten():
+            if isinstance(pix, list):
+                allRevisitTimes += pix
+        plt.figure("Revisit Time Histogram")
+        plt.hist(np.array(allRevisitTimes)/3600, 300, cumulative=True, normed=True, range=[0,2])
+        plt.title("Per-Pixel Revisit Times (opsim)")
+        plt.xlabel("Time (hours)")
+        plt.ylabel("Cumulative number of visits (normalized)")
+        plt.show()
 
         azes = np.array(azes) % (2*np.pi)
 
@@ -92,5 +109,5 @@ class VisualizeOpsim:
         return self.curTime
 
 if __name__ == "__main__":
-    V = VisualizeOpsim(imScale=5.5)
+    V = VisualizeOpsim(imScale=10)
     V.main()
