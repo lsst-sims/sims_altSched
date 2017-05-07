@@ -71,6 +71,9 @@ class GraphicalMonitor:
 
         self.screen = pygame.display.set_mode(resolution)
 
+    def __del__(self):
+        pygame.display.quit()
+
     def updateDisplay(self, skyMap, curTime):
         startTime = Config.surveyStartTime
 
