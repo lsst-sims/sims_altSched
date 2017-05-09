@@ -4,11 +4,11 @@ import sqlite3
 import Config
 from graphics.GraphicalMonitor import GraphicalMonitor
 import astropy.time
-from minis.Visit import Visit
+from Visit import Visit
 from Simulator import Simulator
 import AstronomicalSky
 from SummaryPlots import SummaryPlots
-from minis.SkyMap import SkyMap
+from SkyMap import SkyMap
 
 from Telescope import Telescope
 

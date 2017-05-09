@@ -8,7 +8,7 @@ from minis.Scheduler import Scheduler
 import Config
 import AstronomicalSky
 from Telescope import Telescope
-from minis.SkyMap import SkyMap
+from SkyMap import SkyMap
 import time
 import sys
 from multiprocessing import Pool
