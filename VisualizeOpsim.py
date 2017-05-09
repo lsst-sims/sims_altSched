@@ -32,7 +32,7 @@ class VisualizeOpsim:
     def main(self):
         tel = Telescope()
         if showDisp:
-            skyMap = SkyMap(telescope = tel, resScale=2)
+            skyMap = SkyMap(telescope = tel, resScale=self.imScale)
             display = GraphicalMonitor(skyMap=skyMap)
 
         i = 0
