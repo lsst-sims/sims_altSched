@@ -96,7 +96,28 @@ class VisualizeOpsim:
         plt.title("Per-Pixel Revisit Times (opsim)")
         plt.xlabel("Time (hours)")
         plt.ylabel("Cumulative number of visits (normalized)")
-        plt.show()
+
+        plt.figure("% Visits not accompanied by a revisit within 45 minutes")
+        percentLonelyMap = skyMap.getLonelinessMap(cutoffMins=45)
+        plt.title("Percent of visits with no revisit within 45 minutes")
+        plt.imshow(percentLonelyMap)
+        plt.clim(0,0.4)
+        plt.colorbar()
+
+        for percentile in [10, 50, 75, 90, 95, 99]:
+            plt.figure(str(percentile) + "th percentile revisit time")
+            percentileMap = skyMap.getPercentileMap(percentile)
+            plt.title(str(percentile) + "th percentile revisit time (in days)")
+            plt.imshow(percentileMap / 3600 / 24)
+            plt.clim(0,7)
+            plt.colorbar()
+
+
+        plt.figure("avg revisit time")
+        avgRevisitMap = skyMap.getAvgRevisitMap()
+        plt.imshow(avgRevisitMap)
+        plt.colorbar()
+        plt.show(block=False)
 
         azes = np.array(azes) % (2*np.pi)
 

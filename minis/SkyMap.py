@@ -310,3 +310,27 @@ class SkyMap:
                 avgRevisitTimes[i] = np.mean(pix)
         return self._get2DMap(avgRevisitTimes, 0)
 
+    def getLonelinessMap(self, cutoffMins):
+        def calcPercentLonely(pix):
+            prevRevisitTime = cutoffMins * 60 + 1
+            nVisits = 1
+            nLonelies = 0
+            for revisitTime in pix:
+                nVisits += 1
+                if revisitTime > cutoffMins * 60 and prevRevisitTime > cutoffMins * 60:
+                    nLonelies += 1
+
+                prevRevisitTime = revisitTime
+            return nLonelies / nVisits
+        vCalcPercentLonely = np.vectorize(calcPercentLonely)
+        percentLonelyMap = vCalcPercentLonely(self.getRevisitMap())
+        return percentLonelyMap
+
+    def getPercentileMap(self, percentile):
+        def getPercentile(pix, percentile):
+            if len(pix) == 0:
+                return 0
+            return np.percentile(pix, percentile)
+        vFunc = np.vectorize(getPercentile)
+        revisitTimeMap = self.getRevisitMap()
+        return vFunc(revisitTimeMap, percentile)
