@@ -1,6 +1,6 @@
 from __future__ import division
 
-import Telescope
+from Telescope import Telescope
 import sqlite3
 from matplotlib import pyplot as plt
 import numpy as np
@@ -16,9 +16,10 @@ prevNight = -1
 prevFilter = 'r'
 
 i = 0
+tel = Telescope()
 for alt, az, filter, night, slewTime in c.execute("select altitude, azimuth, filter, night, slewTime from Summary group by expMJD"):
     altaz = np.array([alt, az])
-    mySlewTime = Telescope.calcSlewTime(prevAltaz, np.array([alt, az]))
+    mySlewTime = tel.calcSlewTime(prevAltaz, np.array([alt, az]))
 
     if filter != prevFilter:
         mySlewTime = max(120, mySlewTime)
