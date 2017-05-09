@@ -241,6 +241,12 @@ class SkyMap:
         # this array will hold the 2D, rotated map
         valMap = np.zeros((self.yMax - self.yMin, self.xMax - self.xMin), dtype=vals.dtype)
 
+        # initialize to empty lists if vals dtype is object
+        if vals.dtype == np.dtype("object"):
+            for i in range(valMap.shape[0]):
+                for j in range(valMap.shape[1]):
+                    valMap[i,j] = list()
+
         # the mollweide projection has increasing RA to the right
         # which means that we're looking at the front of the celestial
         # sphere with earth behind. The celestial sphere rotates clockwise 
