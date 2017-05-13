@@ -6,7 +6,6 @@ import AstronomicalSky
 from MiniSurvey import MiniSurvey
 from Visit import Visit
 from Visit import VisitPair
-import Telescope
 import Utils
 
 from matplotlib import pyplot as plt
@@ -79,8 +78,8 @@ class Scheduler:
 
     def _scheduleNight(self, nightNum):
         # decide which filters to use for the night
-        leftOut = nightNum % len(Telescope.filters)
-        nightsFilters = copy.deepcopy(Telescope.filters)
+        leftOut = nightNum % len(self.telescope.filters)
+        nightsFilters = copy.deepcopy(self.telescope.filters)
         del nightsFilters[leftOut]
         nightsFilters = np.array(nightsFilters)
 

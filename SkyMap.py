@@ -4,7 +4,7 @@ from astropy import wcs
 import numpy as np
 
 import AstronomicalSky
-import Telescope
+from Telescope import Telescope
 import Utils
 import Config
 import itertools

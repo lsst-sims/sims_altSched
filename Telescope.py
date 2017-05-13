@@ -3,14 +3,17 @@ import numpy as np
 from astropy.coordinates import EarthLocation
 from astropy import units as u
 
-# non-configurable (AstronomicalSky uses these and I don't
-# want to slow it down by requiring it create a Telescope object)
-latitude = np.radians(-(30 + 14 / 60 + 40.7 / 3600))
-longitude = np.radians(-(70 + 44 / 60 + 57.9 / 3600)) 
-filters = ["u", "g", "r", "i", "z", "y"]
-filterId = {filters[i]: i for i in range(len(filters))}
-
 class Telescope:
+    # non-configurable (AstronomicalSky uses these and I don't
+    # want to slow it down by requiring it create a Telescope object)
+    # (don't modify these on an instance)
+    latitude = np.radians(-(30 + 14 / 60 + 40.7 / 3600))
+    longitude = np.radians(-(70 + 44 / 60 + 57.9 / 3600))
+    filters = ["u", "g", "r", "i", "z", "y"]
+    filterId = {}
+    for i, filter in enumerate(filters):
+        filterId[filter] = i
+
     def __init__(self):
         self.fovWidth = np.radians(3.5)
         self.domSlitDiam = 2 * self.fovWidth
@@ -49,9 +52,6 @@ class Telescope:
         self.Rotator_MaxSpeed = np.radians(3.5)
         self.Rotator_Accel = np.radians(1.0)
         self.Rotator_Decel = np.radians(1.0)
-
-        self.latitude = latitude
-        self.longitude = longitude
 
         self.location = EarthLocation(lon = self.longitude * u.rad,
                                       lat = self.latitude * u.rad)
