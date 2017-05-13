@@ -1,5 +1,8 @@
 import numpy as np
 from astropy.time import Time
+import multiprocessing as mp
+from multiprocessing import Pool
+import itertools
 
 def areRasInRange(ras, (minRa, maxRa)):
     if minRa < maxRa:
@@ -34,3 +37,23 @@ def spherical2Cartesian(phi, theta):
         return np.vstack([x, y, z]).T
     else:
         return [x, y, z]
+
+
+# thought I would need this but seems like
+# list(itertools.chain.from_iterable(array)) is fast enough
+# by itself. Leaving this here just in case...
+def _sumWorker(array):
+    return list(itertools.chain.from_iterable(array))
+
+def sumArrayOfLists(arrayOfLists):
+    # 1000 arbitrarily chosen
+    sublistSize = 1000
+
+    nCores = mp.cpu_count()
+    p = Pool(nCores)
+    nSublists = int(len(arrayOfLists) / sublistSize)
+    summed = p.map(_sumWorker, np.array_split(arrayOfLists, nSublists))
+    p.close()
+    p.join()
+
+    return _sumWorker(summed)
