@@ -7,6 +7,7 @@ import AstronomicalSky
 import Telescope
 import Utils
 import Config
+import itertools
 
 import palpy
 
@@ -130,11 +131,11 @@ class SkyMap:
         self.pixValues = np.zeros(len(self.skyPix))
 
         # keep track of how long each row of pixels is in the mollweide
-        # TODO this is slow. Could compute wcs_world2pix at extremal RAs
-        # and subtract to get row length? could call wcs_world2pix on
-        # north and south pole to figure out how many dec pixels need to sample
-        self.rowLengths = {y: (projPix[:,0] == y).sum() 
-                           for y in range(self.yMin, self.yMax)}
+        self.rowLengths = {y: 0 for y in range(self.yMin, self.yMax)}
+        ys = np.sort(projPix[:,0])
+        for y, group in itertools.groupby(ys):
+            self.rowLengths[y] = sum(1 for i in group)
+
         self.rowLengthsCumSum = [sum(self.rowLengths[y] 
                                    for y in range(self.yMin, self.yMin + i))
                                    for i in range(self.yMax - self.yMin)]
