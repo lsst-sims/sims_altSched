@@ -22,6 +22,9 @@ saveMovie = False
 plotAzes = False
 showSummaryPlots = True
 clearDisplayNightly = False
+writeCsv = False
+
+assert(not (showDisp and not trackMap))
 
 # TODO plot azimuth vs time
 # change filters every revisit set (revisits 1 hour, change every 2 hours)
@@ -82,6 +85,9 @@ class Simulator:
 
         i = 0
         prevI = i
+        if writeCsv:
+            outFile = open("sim_results.csv", "w")
+            outFile.write("time (unix), ra (rads), dec (rads), filter\n")
         for visit in sched.schedule():
 
             perNight, deltaI = self.getUpdateRate(i)
@@ -127,6 +133,11 @@ class Simulator:
                 if not isNightYoung:
                     self.curTime += slewTime
                     slewTimes.append(slewTime)
+                if writeCsv:
+                    outFile.write(str(self.time()) + "," + \
+                                  str(visit.ra) + "," + \
+                                  str(visit.dec) + "," + \
+                                  visit.filter + "\n")
                 sched.notifyVisitComplete(visit, self.time())
 
                 # keep track of revisit times
@@ -150,9 +161,12 @@ class Simulator:
             if nightNum > (365/12):
                 break
 
+        if writeCsv:
+            outFile.close()
         if not showSummaryPlots:
             return
 
+        """
         avgRevisitTimes = skyMap.getAvgRevisitMap()
         plt.figure("revisit times")
         plt.title("Average Revisit Times (in minutes)")
