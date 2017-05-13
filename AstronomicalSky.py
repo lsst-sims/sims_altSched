@@ -41,18 +41,20 @@ def getExpTime(ra, dec, otherstuff = None):
     return 30
 
 
-def localSiderialTime(longitude, time):
+def localSiderialTime(longitude, times):
     # this is the timestamp of 12pm 1/1/2000 
     J2000 = 946728000
-    daysSinceJ2000 = (time - J2000) / 3600 / 24
-    dt = datetime.utcfromtimestamp(time)
-    timeInHours = dt.hour + dt.minute / 60 + dt.second / 3600
+    daysSinceJ2000 = (times - J2000) / 3600 / 24
+    dts = np.vectorize(datetime.utcfromtimestamp)(times)
+    def getTimeInHours(dt):
+        return dt.hour + dt.minute / 60 + dt.second / 3600
+    timesInHours = np.vectorize(getTimeInHours)(dts)
 
-    localSiderialTime = 100.46 + 0.985647 * daysSinceJ2000 + \
-                        np.degrees(longitude) + 15 * timeInHours
-    localSiderialTime %= 360 
-    localSiderialTime = np.radians(localSiderialTime)
-    return localSiderialTime
+    localSiderialTimes = 100.46 + 0.985647 * daysSinceJ2000 + \
+                        np.degrees(longitude) + 15 * timesInHours
+    localSiderialTimes %= 360
+    localSiderialTimes = np.radians(localSiderialTimes)
+    return localSiderialTimes
 
 # precompute HA/dec => alt/az lookup table
 # TODO I expected this lookup table to make radec2altaz much faster, but it
@@ -97,7 +99,7 @@ plt.imshow(g_azLookup)
 plt.show()
 """
 
-def radec2altaz(radec, time):
+def radec2altaz(radec, times):
     ra = radec[:,0]
     dec = radec[:,1]
 
@@ -123,8 +125,10 @@ def radec2altaz(radec, time):
 
     # formulas from http://www.stargazing.net/kepler/altaz.html
     
-    LST = localSiderialTime(longitude, time)
-    HA = (LST * np.ones(ra.shape) - ra) % (2*np.pi)
+    LSTs = localSiderialTime(longitude, times)
+    if not isinstance(LSTs, np.ndarray):
+        LSTs = LSTs * np.ones(ra.shape)
+    HA = (LSTs - ra) % (2*np.pi)
 
     HAIndex = (HA / (2*np.pi) * g_nHAs).astype(int)
     decIndex = ((dec+np.pi/2) / np.pi * g_nDecs).astype(int)
@@ -137,7 +141,7 @@ def radec2altaz(radec, time):
     return np.vstack([alt, az]).T
 
 
-def altaz2radec(altaz, time):
+def altaz2radec(altaz, times):
     alt = altaz[:,0]
     az = altaz[:,1]
 
@@ -151,7 +155,7 @@ def altaz2radec(altaz, time):
 
     # formulas from http://star-www.st-and.ac.uk/~fv/webnotes/chapter7.htm
     
-    LST = localSiderialTime(longitude, time)
+    LSTs = localSiderialTime(longitude, times)
     sin = np.sin
     cos = np.cos
     lat = latitude
@@ -161,7 +165,7 @@ def altaz2radec(altaz, time):
     cosHourAngle = (sin(alt) - sin(dec) * sin(lat)) / (cos(dec) * cos(lat))
     hourAngle = np.arcsin(sinHourAngle)
     hourAngle[cosHourAngle <= 0] = np.pi - hourAngle[cosHourAngle < 0]
-    ra = LST - hourAngle
+    ra = LSTs - hourAngle
 
     # this method runs in ~40us vs ~12ms for the astropy code and returns
     # results within ~1deg as above

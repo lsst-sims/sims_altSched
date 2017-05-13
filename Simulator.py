@@ -187,9 +187,9 @@ class Simulator:
             plt.colorbar()
 
         azes = np.array(azes) % (2*np.pi)
+        """
 
-        plotter = SummaryPlots(alts = alts, azes = azes, decs = obsDecs,
-                               slewTimes = slewTimes, revisitTimes = revisitTimes)
+        plotter = SummaryPlots(skyMap, slewTimes = slewTimes)
 
         print "avg slew time", np.mean(slewTimes), "seconds"
         print "median slew time", np.median(slewTimes), "seconds"

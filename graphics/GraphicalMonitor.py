@@ -5,7 +5,7 @@ import numpy as np
 from Telescope import Telescope
 import AstronomicalSky
 import Config
-from minis.SkyMap import SkyMap
+from SkyMap import SkyMap
 
 import pygame
 from matplotlib.colors import hsv_to_rgb

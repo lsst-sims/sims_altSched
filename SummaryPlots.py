@@ -3,26 +3,61 @@ from __future__ import division
 from matplotlib import pyplot as plt
 import Telescope
 import numpy as np
+import AstronomicalSky as AS
+import time
+import itertools
 
 class SummaryPlots:
-    def __init__(self, alts=None, azes=None, decs=None, 
-                 slewTimes=None, revisitTimes=None):
-        self.alts = []
-        self.azes = []
-        self.decs = []
-        self.slewTimes = []
-        self.revisitTimes = []
+    def __init__(self, skyMap, slewTimes=None):
+        print
 
-        if alts is not None:
-            self.alts = alts
-        if azes is not None:
-            self.azes = azes
-        if decs is not None:
-            self.decs = decs
-        if slewTimes is not None:
-            self.slewTimes = slewTimes
-        if revisitTimes is not None:
-            self.revisitTimes = revisitTimes
+        self.skyMap = skyMap
+        self.slewTimes = slewTimes
+
+        visitInfoMap = skyMap.getVisitInfoMap()
+ 
+        # flatten turns 2D into 1D, sum() adds all the visitInfo arrays
+        # corresponding to each pixel
+        allVisitInfos = visitInfoMap.flatten()
+
+        start_time = time.time()
+        allVisitInfos = list(itertools.chain.from_iterable(allVisitInfos))
+        print "summed allVisitInfos in ", time.time() - start_time, "secs"
+
+        # this gives an Nx4 array (assuming visitInfo is [time, ra, dec, filter])
+        # TODO make this work, and this should apply everywhere
+        # dtype = [("time",float), ("ra", float), ("dec", float), ("filter", "S1")]
+        #allVisitInfos = np.array(map(tuple, allVisitInfos), dtype=np.dtype(dtype))
+        allVisitInfos = np.array(allVisitInfos)
+
+        times = allVisitInfos[:,0].astype(float)
+        self.ras = allVisitInfos[:,1].astype(float)
+        self.decs = allVisitInfos[:,2].astype(float)
+        self.filters = allVisitInfos[:,3].astype("S1")
+
+        altazes = AS.radec2altaz(np.vstack([self.ras, self.decs]).T, times)
+        self.alts = altazes[:,0]
+        self.azes = altazes[:,1]
+
+        # now get all revisit times
+        # (one for loop is necessary because the number of visitInfos in a
+        #  pixel is variable)
+        def getRevisitTimes(pix):
+            revisitTimes = []
+            prevVisitTime = -3600*24*365
+            for visitInfo in pix:
+                time = visitInfo[0]
+                revisitTime = time - prevVisitTime
+                if revisitTime < 3600 * 24 * 30 * 4:
+                    revisitTimes.append(revisitTime)
+                prevVisitTime = time
+            return revisitTimes
+        self.revisitTimes = np.vectorize(getRevisitTimes, otypes="O")(visitInfoMap)
+        self.revisitTimes = self.revisitTimes.flatten()
+
+        start_time = time.time()
+        self.revisitTimes = list(itertools.chain.from_iterable(self.revisitTimes))
+        print "time to sum revisitTimes:", time.time() - start_time, "secs"
 
     def show(self):
         # called to show plots that have been queued

@@ -130,6 +130,9 @@ class SkyMap:
         self.pixValues = np.zeros(len(self.skyPix))
 
         # keep track of how long each row of pixels is in the mollweide
+        # TODO this is slow. Could compute wcs_world2pix at extremal RAs
+        # and subtract to get row length? could call wcs_world2pix on
+        # north and south pole to figure out how many dec pixels need to sample
         self.rowLengths = {y: (projPix[:,0] == y).sum() 
                            for y in range(self.yMin, self.yMax)}
         self.rowLengthsCumSum = [sum(self.rowLengths[y] 
@@ -140,6 +143,7 @@ class SkyMap:
         # variables to keep track of summary statistics
         self.previousVisitTimes = np.nan * np.ones(self.pixValues.shape)
         self.revisitTimes = [[] for i in range(len(self.pixValues))]
+        self.visitInfos = [[] for i in range(len(self.pixValues))]
 
     def getResolution(self):
         return (self.xMax - self.xMin, self.yMax - self.yMin)
@@ -232,6 +236,8 @@ class SkyMap:
             # just risen for the year, so don't count that
             if not np.isnan(revisitTime) and revisitTime < 3600 * 24 * 30 * 4:
                 self.revisitTimes[coveredPixId].append(revisitTime)
+            visitInfo = [time, visit.ra, visit.dec, visit.filter]
+            self.visitInfos[coveredPixId].append(visitInfo)
         self.previousVisitTimes[coveredPixIds] = time
 
 
@@ -291,6 +297,11 @@ class SkyMap:
             rowStartProjPixId += rowLen
 
         return valMap
+
+    def getVisitInfoMap(self):
+        # see comment from getRevisitMap
+        visitInfoMap = self._get2DMap(np.array(self.visitInfos), 0)
+        return visitInfoMap
 
     def getNVisitsMap(self, skyAngle):
         nVisitsMap = self._get2DMap(self.pixValues, skyAngle)
