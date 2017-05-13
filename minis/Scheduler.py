@@ -79,8 +79,8 @@ class Scheduler:
 
     def _scheduleNight(self, nightNum):
         # decide which filters to use for the night
-        leftOut = nightNum % len(self.telescope.filters)
-        nightsFilters = copy.deepcopy(self.telescope.filters)
+        leftOut = nightNum % len(Telescope.filters)
+        nightsFilters = copy.deepcopy(Telescope.filters)
         del nightsFilters[leftOut]
         nightsFilters = np.array(nightsFilters)
 

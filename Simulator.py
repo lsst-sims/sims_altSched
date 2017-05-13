@@ -63,7 +63,7 @@ class Simulator:
         if trackMap:
             skyMap = SkyMap(telescope=tel, resScale=2)
         if showDisp:
-            display = GraphicalMonitor(skyMap=skyMap)
+            display = GraphicalMonitor(skyMap=skyMap, mode="filters")
        
         nightNum = 0
         isNightYoung = True

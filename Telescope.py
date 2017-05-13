@@ -7,6 +7,8 @@ from astropy import units as u
 # want to slow it down by requiring it create a Telescope object)
 latitude = np.radians(-(30 + 14 / 60 + 40.7 / 3600))
 longitude = np.radians(-(70 + 44 / 60 + 57.9 / 3600)) 
+filters = ["u", "g", "r", "i", "z", "y"]
+filterId = {filters[i]: i for i in range(len(filters))}
 
 class Telescope:
     def __init__(self):
@@ -15,8 +17,6 @@ class Telescope:
         self.raftWidth = self.fovWidth / 5
         self.minRotation = -np.pi/2
         self.maxRotation = np.pi/2
-
-        self.filters = ["u", "g", "r", "i", "z", "y"]
 
         # values from http://ops2.lsst.org/docs/current/system.html
         self.maxAlt = np.radians(86.5)

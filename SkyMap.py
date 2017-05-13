@@ -130,6 +130,12 @@ class SkyMap:
         # store the number of visits to each pixel in pixValues
         self.pixValues = np.zeros(len(self.skyPix))
 
+        # store an array with the last filter observed at a pixel
+        # initially store len(Telescope.filters) + 1 so that
+        # a graphics monitor will know that there has been no observation here
+        invalidFilter = len(Telescope.filters) + 1
+        self.obsFilters = np.ones(self.pixValues.shape) * invalidFilter
+
         # keep track of how long each row of pixels is in the mollweide
         self.rowLengths = {y: 0 for y in range(self.yMin, self.yMax)}
         ys = np.sort(projPix[:,0])
@@ -150,8 +156,10 @@ class SkyMap:
         return (self.xMax - self.xMin, self.yMax - self.yMin)
  
     def clear(self):
-        # clear pixValues
-        self.pixValues = np.zeros(self.pixValues.shape)
+        # clear pixValues and obsFilters
+        # note: this does not clear self.visitInfos
+        self.pixValues[:] = 0
+        self.obsFilters[:] = 0
 
     def addVisit(self, visit, time):
         # edgeOfFov should be the radius of a circle that includes all of the fov
@@ -231,6 +239,7 @@ class SkyMap:
         coveredPixIds = candidatePixIds[arePixCovered(pupilCoords[:,0],
                                                       pupilCoords[:,1])]
         self.pixValues[coveredPixIds] += 1
+        self.obsFilters[coveredPixIds] = Telescope.filterId[visit.filter]
         for coveredPixId in coveredPixIds:
             revisitTime = time - self.previousVisitTimes[coveredPixId]
             # if the last visit was > 4 months ago, the field must have
@@ -272,7 +281,7 @@ class SkyMap:
 
             rowLen = self.rowLengths[y]
 
-            # these are indices into valMap[y], not into pixvalues
+            # these are indices into valMap[y], not into vals
             rowStart = int((self.xMax - self.xMin - rowLen) / 2)
             rowEnd = rowStart + rowLen
 
@@ -294,19 +303,24 @@ class SkyMap:
                     vals[rowStartProjPixId: \
                          rowStartProjPixId + rowLen - numPixMoved]
 
-            # keep track of where in pixValues the next row starts
+            # keep track of where in vals the next row starts
             rowStartProjPixId += rowLen
 
         return valMap
 
-    def getVisitInfoMap(self):
+    def getVisitInfoMap(self, skyAngle = 0):
         # see comment from getRevisitMap
-        visitInfoMap = self._get2DMap(np.array(self.visitInfos), 0)
+        visitInfoMap = self._get2DMap(np.array(self.visitInfos), skyAngle)
         return visitInfoMap
 
     def getNVisitsMap(self, skyAngle):
         nVisitsMap = self._get2DMap(self.pixValues, skyAngle)
         return nVisitsMap
+
+    def getFiltersMap(self, skyAngle):
+        # returns a map of the last filter observed in at each pixel
+        filterMap = self._get2DMap(self.obsFilters, skyAngle).astype(int)
+        return filterMap
 
     def getRevisitMap(self):
         # np.array(self.revisitTimes) will hopefully return a 1-D

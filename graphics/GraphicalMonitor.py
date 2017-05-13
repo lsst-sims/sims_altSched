@@ -2,7 +2,9 @@ from __future__ import division
 
 import numpy as np
 
-from Telescope import Telescope
+import Telescope
+# sorry
+from Telescope import Telescope as Tel
 import AstronomicalSky
 import Config
 from SkyMap import SkyMap
@@ -12,8 +14,11 @@ from matplotlib.colors import hsv_to_rgb
 
 class GraphicalMonitor:
 
-    def __init__(self, skyMap):
-        self.pendingVisits = []
+    def __init__(self, skyMap, mode="nvisits"):
+        self.mode = mode
+        supportedModes = set(["nvisits","filters"])
+        if mode not in supportedModes:
+            raise ValueError("graphics mode " + str(mode) + " not supported")
 
         # calculate ra_0: the ra of the zenith at Config.surveyStartTime
         # this is used to make the zenith centered in the displayed image
@@ -44,7 +49,7 @@ class GraphicalMonitor:
         airmassContourAltaz = np.vstack([airmassContourAlt, airmassContourAz]).T
         self.airmassContour = skyMap.altaz2imdata(airmassContourAltaz)
         
-        telescope = Telescope()
+        telescope = Tel()
 
         # calculate a contour in imdata representing the zenith avoidance zone
         zenithAvoidAz = np.linspace(0, 2 * np.pi, num=30*contourResolution)
@@ -69,6 +74,22 @@ class GraphicalMonitor:
         rgb = (hsv_to_rgb(hsv) * 255).astype(int)
         self.packedColorLookup = (rgb[:,0] << 16) + (rgb[:,1] << 8) + rgb[:,2]
 
+        self.filterColorLookup = np.zeros(len(Telescope.filters) + 1)
+        self.filterColorLookup[-1] = (0xFF << 16) + (0xFF << 8) + 0xFF
+        for i, filter in enumerate(Telescope.filters):
+            if filter == "u":
+                self.filterColorLookup[i] = (0x51 << 16) + (0x83 << 8) + 0xB5
+            if filter == "g":
+                self.filterColorLookup[i] = (0xB8 << 16) + (0x57 << 8) + 0x50
+            if filter == "r":
+                self.filterColorLookup[i] = (0x97 << 16) + (0xB1 << 8) + 0x5C
+            if filter == "i":
+                self.filterColorLookup[i] = (0x82 << 16) + (0x6A << 8) + 0x9F
+            if filter == "z":
+                self.filterColorLookup[i] = (0x4D << 16) + (0xA6 << 8) + 0xBC
+            if filter == "y":
+                self.filterColorLookup[i] = (0xE2 << 16) + (0x94 << 8) + 0x46
+
         self.screen = pygame.display.set_mode(resolution)
 
     def __del__(self):
@@ -82,14 +103,18 @@ class GraphicalMonitor:
         # increases with time
         skyAngle = 2*np.pi - AstronomicalSky.raOfMeridian(curTime - startTime)
 
-        nVisitsMap = skyMap.getNVisitsMap(skyAngle)
-        imdata = nVisitsMap
-        if np.max(nVisitsMap) > 0:
-            imdata = imdata / np.max(nVisitsMap)
+        if self.mode == "nvisits":
+            imdata = skyMap.getNVisitsMap(skyAngle)
 
-        # 240/360 was chosen so we go from blue to red
-        hue = (((240 - imdata * 240) / 360) * 255).astype(int).transpose()
-        imdata = self.packedColorLookup[hue]
+            if np.max(imdata) > 0:
+                imdata = imdata / np.max(imdata)
+            # 240/360 was chosen so we go from blue to red
+            hue = (((240 - imdata * 240) / 360) * 255).astype(int).transpose()
+            imdata = self.packedColorLookup[hue]
+
+        elif self.mode == "filters":
+            filterMap = skyMap.getFiltersMap(skyAngle).T
+            imdata = self.filterColorLookup[filterMap]
 
         # draw a line down the middle to represent the meridian
         imdata[self.meridianX,:] = 0
