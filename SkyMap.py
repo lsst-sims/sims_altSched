@@ -133,8 +133,8 @@ class SkyMap:
         # store an array with the last filter observed at a pixel
         # initially store len(Telescope.filters) + 1 so that
         # a graphics monitor will know that there has been no observation here
-        invalidFilter = len(Telescope.filters) + 1
-        self.obsFilters = np.ones(self.pixValues.shape) * invalidFilter
+        self.invalidFilter = len(Telescope.filters)
+        self.obsFilters = np.ones(self.pixValues.shape) * self.invalidFilter
 
         # keep track of how long each row of pixels is in the mollweide
         self.rowLengths = {y: 0 for y in range(self.yMin, self.yMax)}
@@ -159,7 +159,7 @@ class SkyMap:
         # clear pixValues and obsFilters
         # note: this does not clear self.visitInfos
         self.pixValues[:] = 0
-        self.obsFilters[:] = 0
+        self.obsFilters[:] = self.invalidFilter
 
     def addVisit(self, visit, time):
         # edgeOfFov should be the radius of a circle that includes all of the fov
@@ -251,11 +251,12 @@ class SkyMap:
         self.previousVisitTimes[coveredPixIds] = time
 
 
-    def _get2DMap(self, vals, skyAngle):
+    def _get2DMap(self, vals, skyAngle, defaultVal = 0):
         # returns a 2D map of vals rotated by skyAngle
 
         # this array will hold the 2D, rotated map
-        valMap = np.zeros((self.yMax - self.yMin, self.xMax - self.xMin), dtype=vals.dtype)
+        valMap = np.ones((self.yMax - self.yMin, self.xMax - self.xMin), dtype=vals.dtype)
+        valMap *= defaultVal
 
         # initialize to empty lists if vals dtype is object
         if vals.dtype == np.dtype("object"):
@@ -319,7 +320,9 @@ class SkyMap:
 
     def getFiltersMap(self, skyAngle):
         # returns a map of the last filter observed in at each pixel
-        filterMap = self._get2DMap(self.obsFilters, skyAngle).astype(int)
+        filterMap = self._get2DMap(self.obsFilters,
+                                   skyAngle,
+                                   defaultVal = self.invalidFilter).astype(int)
         return filterMap
 
     def getRevisitMap(self):
