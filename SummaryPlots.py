@@ -1,7 +1,7 @@
 from __future__ import division
 
 from matplotlib import pyplot as plt
-import Telescope
+from Telescope import Telescope
 import numpy as np
 import AstronomicalSky as AS
 import time
