@@ -149,6 +149,7 @@ class SkyMap:
 
         # variables to keep track of summary statistics
         self.previousVisitTimes = np.nan * np.ones(self.pixValues.shape)
+        # TODO delete self.revisitTimes?
         self.revisitTimes = [[] for i in range(len(self.pixValues))]
         self.visitInfos = [[] for i in range(len(self.pixValues))]
 

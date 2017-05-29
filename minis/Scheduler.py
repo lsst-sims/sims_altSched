@@ -32,7 +32,7 @@ class Scheduler:
 
         # these estimates get updated at the end of each night
         # (currently estAvgExpTime is not updated)
-        self.estAvgSlewTime = 6 # seconds
+        self.estAvgSlewTime = 7 # seconds
         self.estAvgExpTime = 30 #seconds
 
         # keep track of how long we spend slewing each night
@@ -73,7 +73,6 @@ class Scheduler:
         leftOut = self.leftOutFilterIds[direction]
         nightsFilterIds = range(0, leftOut) + \
                           range(leftOut + 1, len(Telescope.filters))
-        print "nightsFilterIds", nightsFilterIds
         self.leftOutFilterIds[direction] = inc(self.leftOutFilterIds[direction])
 
         filterId = self.startFilterIds[direction]
@@ -84,8 +83,6 @@ class Scheduler:
             filterIds.append(filterId)
             if i % 2 == 0:
                 filterId = inc(filterId)
-        print "first scan:", filterIds[0], filterIds[2]
-        print "second scan:", filterIds[1], filterIds[3]
 
         # set up startFilterId for next night
         for i in range(2):
