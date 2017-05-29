@@ -8,7 +8,9 @@ surveyNumNights = 365 * 10
 # this is january 1 2022 at midnight
 surveyStartTime = 1640995200
 
-maxDec = np.radians(30)
+# 6.2 degrees is where the area in the south and east
+# equals the area in the north
+maxDec = np.radians(6.2)
 minDec = np.radians(-90)
 
 # buffer zone near the zenith to the N/S/E 
