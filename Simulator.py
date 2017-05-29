@@ -41,18 +41,24 @@ class Simulator:
         # a speeding up effect
         perNight = False
         deltaI = 0
-        if 0 <= i < 1000:
+        speed1 = 10
+        speed2 = 900
+        cut1 = 1000
+        cut2 = 1500
+        cut3 = 10000
+        cut4 = 50000
+        if 0 <= i < cut1:
             deltaI = 1
-        if 1000 <= i < 1500:
-            deltaI = int((i - 1000)/500*10) + 1
-        if 1500 <= i < 10000:
-            deltaI = 10
-        if 10000 <= i < 50000:
-            deltaI = int((i - 10000)/50000*900) + 10
-        if 50000 <= i:
+        if cut1 <= i < cut2:
+            deltaI = int((i - cut1)/(cut2-cut1)*speed1) + 1
+        if cut2 <= i < cut3:
+            deltaI = speed1
+        if cut3 <= i < cut4:
+            deltaI = int((i - cut3)/(cut4-cut3)*speed2) + speed1
+        if cut4 <= i:
             perNight = True
 
-        return (True, 1)
+        return (False, 1)
         return (perNight, deltaI)
 
     def run(self, tel):
