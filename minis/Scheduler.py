@@ -114,7 +114,8 @@ class Scheduler:
             # self._scheduleNight, return None until the next night starts
             while AstronomicalSky.nightNum(self.context.time()) == nightNum:
                 yield None
-            self.estAvgSlewTime = np.mean(self.curNightSlewTimes)
+            if len(self.curNightSlewTimes) > 0:
+                self.estAvgSlewTime = np.mean(self.curNightSlewTimes)
 
     def _scheduleNight(self, nightNum):
         # decide which way to point tonight

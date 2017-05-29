@@ -61,7 +61,32 @@ class Simulator:
         return (False, 1)
         return (perNight, deltaI)
 
+    def parseDowntime(self, schedFileName="schedDown.conf",
+                            unschedFileName="unschedDown.conf"):
+        def parseSchedFile(filename):
+            downtimeNights = set([])
+            with open(filename) as schedFile:
+                for line in schedFile:
+                    line = line.strip()
+                    if len(line) == 0 or line[0] == "#":
+                        continue
+                    line = line.split("#")[0].strip()
+                    param, value = map(str.strip, line.split("="))
+                    if param == "startNight":
+                        startNight = int(value)
+                    if param == "duration":
+                        # relying on startNight having already been set
+                        duration = int(value)
+                        downtimeNights.update(range(startNight, startNight + duration))
+            return downtimeNights
+
+        schedDownNights = parseSchedFile(schedFileName)
+        unschedDownNights = parseSchedFile(unschedFileName)
+        print schedDownNights | unschedDownNights
+        return schedDownNights | unschedDownNights
+
     def run(self, tel):
+        downtimeNights = self.parseDowntime()
         totalNVisits = 0
         sched = Scheduler(telescope=tel, context=self)
 
@@ -161,8 +186,10 @@ class Simulator:
             if self.curTime < AstronomicalSky.nightEnd(nightNum):
                 isNightYoung = False
             else:
-                self.curTime = AstronomicalSky.nightStart(nightNum + 1)
                 nightNum += 1
+                while nightNum in downtimeNights:
+                    nightNum += 1
+                self.curTime = AstronomicalSky.nightStart(nightNum)
                 isNightYoung = True
 
             i += 1
