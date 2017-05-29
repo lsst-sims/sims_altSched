@@ -1,8 +1,5 @@
 from __future__ import division
 import numpy as np
-from astropy.coordinates import AltAz
-from astropy.coordinates import EarthLocation
-from astropy.coordinates import ICRS
 from astropy import units as u
 from datetime import datetime
 

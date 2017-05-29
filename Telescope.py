@@ -1,6 +1,5 @@
 from __future__ import division
 import numpy as np
-from astropy.coordinates import EarthLocation
 from astropy import units as u
 
 class Telescope:
@@ -52,9 +51,6 @@ class Telescope:
         self.Rotator_MaxSpeed = np.radians(3.5)
         self.Rotator_Accel = np.radians(1.0)
         self.Rotator_Decel = np.radians(1.0)
-
-        self.location = EarthLocation(lon = self.longitude * u.rad,
-                                      lat = self.latitude * u.rad)
 
         self.settleTime = 3
         self.filterChangeTime = 120
