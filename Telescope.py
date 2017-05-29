@@ -57,8 +57,9 @@ class Telescope:
                                       lat = self.latitude * u.rad)
 
         self.settleTime = 3
+        self.filterChangeTime = 120
 
-    def calcSlewTime(self, altaz1, altaz2):
+    def calcSlewTime(self, altaz1, filter1, altaz2, filter2):
         # assume that we don't have to worry about the dome slew time
         # (might be reasonable if we never do long slews)
         # FYI this takes on the order of 10us for 1 slew calculation (longer now)
@@ -132,4 +133,10 @@ class Telescope:
         #print "tel Alt", telAltSlewTime
         #print "tel Az", telAzSlewTime
         totTelTime = max(telAltSlewTime, telAzSlewTime) + self.settleTime
-        return max(totTelTime, totDomTime)
+        slewTime = max(totTelTime, totDomTime)
+
+        # include filter change time if necessary
+        if filter1 != filter2:
+            slewTime = max(slewTime, self.filterChangeTime)
+
+        return slewTime

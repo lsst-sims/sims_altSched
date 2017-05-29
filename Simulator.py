@@ -112,7 +112,8 @@ class Simulator:
                 alts.append(altaz[0])
                 azes.append(altaz[1])
                 if not isNightYoung:
-                    slewTime = tel.calcSlewTime(prevAltaz, altaz)
+                    slewTime = tel.calcSlewTime(prevAltaz, prevFilter,
+                                                altaz, visit.filter)
 
                 # notify the display of the visit
                 if trackMap:
@@ -146,6 +147,7 @@ class Simulator:
                     revisitTimes.append(np.abs(visitPair.visit1.timeOfCompletion - \
                                                visitPair.visit2.timeOfCompletion))
                 prevAltaz = altaz
+                prevFilter = visit.filter
 
             if isNightYoung and showDisp and clearDisplayNightly:
                 skyMap.clear()

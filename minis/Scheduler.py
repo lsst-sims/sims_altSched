@@ -100,15 +100,18 @@ class Scheduler:
             # reset the slew times array
             self.curNightSlewTimes = []
             prevAltaz = None
+            prevFilter = self.telescope.filters[0]
 
             # return each visit prescribed by scheduleNight()
             for visit in self._scheduleNight(nightNum):
                 radec = np.array([[visit.ra, visit.dec]])
                 altaz = AstronomicalSky.radec2altaz(radec, self.context.time())[0]
                 if prevAltaz is not None:
-                    slewTime = self.telescope.calcSlewTime(prevAltaz, altaz)
+                    slewTime = self.telescope.calcSlewTime(prevAltaz, prevFilter,
+                                                           altaz, visit.filter)
                     self.curNightSlewTimes.append(slewTime)
                 prevAltaz = altaz
+                prevFilter = visit.filter
                 yield visit
             # if the night isn't over and we've exhausted the visits in 
             # self._scheduleNight, return None until the next night starts

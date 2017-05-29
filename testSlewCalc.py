@@ -19,10 +19,7 @@ i = 0
 tel = Telescope()
 for alt, az, filter, night, slewTime in c.execute("select altitude, azimuth, filter, night, slewTime from Summary group by expMJD"):
     altaz = np.array([alt, az])
-    mySlewTime = tel.calcSlewTime(prevAltaz, np.array([alt, az]))
-
-    if filter != prevFilter:
-        mySlewTime = max(120, mySlewTime)
+    mySlewTime = tel.calcSlewTime(prevAltaz, prevFilter, np.array([alt, az]), filter)
 
     if prevNight == night:
         mySlewTimes.append(mySlewTime)
