@@ -1,7 +1,9 @@
 from __future__ import division
 import numpy as np
 from astropy import units as u
+import ephem
 from datetime import datetime
+from datetime import timedelta
 
 import Config
 from Telescope import Telescope
@@ -9,14 +11,42 @@ from Telescope import Telescope
 from matplotlib import pyplot as plt
 import time
 
+
+tel = ephem.Observer()
+tel.lat = Telescope.latitude
+tel.lon = Telescope.longitude
+tel.horizon = "-12:00:00" # start observing when sun is 12 deg below horizon
+sun = ephem.Sun()
+
+starts = {}
+ends = {}
+
 def nightLength(nightNum):
-    return 60 * 60 * 8
+    return nightEnd(nightNum) - nightStart(nightNum)
 
 def nightStart(nightNum):
-    return Config.surveyStartTime + nightNum * 60 * 60 * 24
+    if nightNum in starts:
+        return starts[nightNum]
+    startDate = datetime.fromtimestamp(Config.surveyStartTime)
+    startDate = startDate.replace(hour=12, minute=0, second=0)
+    curDate = startDate + timedelta(nightNum)
+    dublinJD = tel.next_setting(sun, start=curDate)
+    mjd = dublinJD + 15019.5 # convert from dublin JD to modified JD
+    unix = (mjd - 40587) * 86400
+    starts[nightNum] = unix
+    return unix
 
 def nightEnd(nightNum):
-    return nightStart(nightNum) + nightLength(nightNum)
+    if nightNum in ends:
+        return ends[nightNum]
+    startDate = datetime.fromtimestamp(Config.surveyStartTime)
+    startDate = startDate.replace(hour=12, minute=0, second=0)
+    curDate = startDate + timedelta(nightNum)
+    dublinJD = tel.next_rising(sun, start=curDate)
+    mjd = dublinJD + 15019.5 # convert from dublin JD to modified JD
+    unix = (mjd - 40587) * 86400
+    ends[nightNum] = unix
+    return unix
 
 def nightNum(time):
     return int((time - Config.surveyStartTime) / 3600 / 24)
