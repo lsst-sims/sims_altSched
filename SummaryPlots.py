@@ -7,22 +7,29 @@ import AstronomicalSky as AS
 import time
 import itertools
 
+import logging
+logging.basicConfig(format="%(asctime)s: %(message)s")
+log = logging.getLogger("SummaryPlots")
+log.setLevel(logging.DEBUG)
+
 class SummaryPlots:
     def __init__(self, skyMap, slewTimes=None):
         print
+        log.debug("start __init__")
 
         self.skyMap = skyMap
         self.slewTimes = slewTimes
 
         visitInfoMap = skyMap.getVisitInfoMap()
+
+        log.debug("got visitInfoMap")
  
-        # flatten turns 2D into 1D, sum() adds all the visitInfo arrays
+        # flatten turns 2D into 1D, itertools adds all the visitInfo arrays
         # corresponding to each pixel
         allVisitInfos = visitInfoMap.flatten()
-
-        start_time = time.time()
+        log.debug("flattened visitInfoMap")
         allVisitInfos = list(itertools.chain.from_iterable(allVisitInfos))
-        print "summed allVisitInfos in ", time.time() - start_time, "secs"
+        log.debug("combined all visitInfos")
 
         # this gives an Nx4 array (assuming visitInfo is [time, ra, dec, filter])
         # TODO make this work, and this should apply everywhere
@@ -30,14 +37,19 @@ class SummaryPlots:
         #allVisitInfos = np.array(map(tuple, allVisitInfos), dtype=np.dtype(dtype))
         allVisitInfos = np.array(allVisitInfos)
 
+        log.debug("calculated allVisitInfos")
+
         times = allVisitInfos[:,0].astype(float)
         self.ras = allVisitInfos[:,1].astype(float)
         self.decs = allVisitInfos[:,2].astype(float)
         self.filters = allVisitInfos[:,3].astype("S1")
 
+        log.debug("sliced allVisitInfos")
         altazes = AS.radec2altaz(np.vstack([self.ras, self.decs]).T, times)
         self.alts = altazes[:,0]
-        self.azes = altazes[:,1]
+        self.azes = altazes[:,1]#.clip(0,2*np.pi)
+
+        log.debug("got altazes")
 
         # now get all revisit times
         # (one for loop is necessary because the number of visitInfos in a
@@ -55,9 +67,12 @@ class SummaryPlots:
         self.revisitTimes = np.vectorize(getRevisitTimes, otypes="O")(visitInfoMap)
         self.revisitTimes = self.revisitTimes.flatten()
 
-        start_time = time.time()
+        log.debug("got revisitTimes")
+
         self.revisitTimes = list(itertools.chain.from_iterable(self.revisitTimes))
-        print "time to sum revisitTimes:", time.time() - start_time, "secs"
+
+        log.debug("flattened revisitTimes")
+        log.debug("end __init__")
 
     def show(self):
         # called to show plots that have been queued
@@ -66,10 +81,15 @@ class SummaryPlots:
     def dAirmassCum(self):
         # calculate dAirmass for each visit
         dAirmasses = []
+        log.debug("start dAirmassCum")
+
         for alt, dec in zip(self.alts, self.decs):
             airmass = 1 / np.sin(alt)
             dAirmass = airmass - (1/np.cos(dec - Telescope.latitude))
             dAirmasses.append(dAirmass)
+
+        log.debug("got dAirmasses")
+
         # make a histogram showing the cumulative distribution of dAirmasses
         plt.figure("DAirmass Cumulative Distribution")
         plt.title("Cumulative distribution of observed airmass - optimal airmass")
@@ -77,6 +97,7 @@ class SummaryPlots:
                        "sec(declination - telescope latitude)")
         plt.ylim(0,1)
         plt.hist(dAirmasses, 300, range=(0,0.6), cumulative=True, normed=True)
+        log.debug("end dAirmassCum")
     
     def airmassHist(self):
         airmasses = []
@@ -142,11 +163,13 @@ class SummaryPlots:
 
     def zenithAngleContour(self):
         # similar to self.dAirmassContour
-        nZenith = 50
+        log.debug("start zenithAngleContour")
+
+        nZenith = 75
         minZenith = 0
         maxZenith = 90
 
-        nAzes = 100
+        nAzes = 150
 
         # create a grid of r and theta
         r, theta = np.meshgrid(np.linspace(minZenith, maxZenith, num=nZenith),
@@ -163,6 +186,8 @@ class SummaryPlots:
             thetaId = int(az / (2*np.pi) * (nAzes-1))
             values[thetaId, rId] += 1
 
+        log.debug("got values")
+
         # and plot
         fix, ax = plt.subplots(subplot_kw=dict(projection='polar'))
         ax.set_title("nVisits")
@@ -172,6 +197,8 @@ class SummaryPlots:
         ax.set_ylabel("Zenith angle (degrees)")
         p = ax.contourf(theta, r, values)
         plt.colorbar(p, ax=ax)
+
+        log.debug("end zenithAngleContour")
 
     def slewHist(self, maxSlew = 30):
         plt.figure("Slew Time Histogram")
