@@ -126,7 +126,7 @@ class SummaryPlots:
             rId = (dAirmass - minDAirmass) / (maxDAirmass - minDAirmass) * nDAirmass
             rId = int(rId)
 
-            thetaId  = int(az / (2*np.pi) * nAzes)
+            thetaId  = int(az / (2*np.pi) * (nAzes-1))
             values[thetaId, rId] += 1
 
         # now show contour plots in polar coordinates where r is dAirmass
@@ -154,13 +154,13 @@ class SummaryPlots:
         values = np.zeros(r.shape)
         for alt, az, dec in zip(self.alts, self.azes, self.decs):
             zenithAngle = 90 - np.degrees(alt)
-            if zenithAngle < minZenith or zenithAngle > maxZenith:
+            if zenithAngle < minZenith or zenithAngle >= maxZenith:
                 continue
 
             # calculate offsets into r and theta
-            rId = (90-np.degrees(alt) - minZenith) / (maxZenith - minZenith) * nZenith
+            rId = (zenithAngle - minZenith) / (maxZenith - minZenith) * nZenith
             rId = int(rId)
-            thetaId  = int(az / (2*np.pi) * nAzes)
+            thetaId = int(az / (2*np.pi) * (nAzes-1))
             values[thetaId, rId] += 1
 
         # and plot
