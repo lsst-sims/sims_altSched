@@ -32,7 +32,8 @@ class Scheduler:
 
         # these estimates get updated at the end of each night
         # (currently estAvgExpTime is not updated)
-        self.estAvgSlewTime = 7 # seconds
+        self.NEstAvgSlewTime = 7 # seconds
+        self.SEEstAvgSlewTime = 7 # seconds
         self.estAvgExpTime = 30 #seconds
 
         # keep track of how long we spend slewing each night
@@ -94,13 +95,29 @@ class Scheduler:
 
     def schedule(self):
         for nightNum in range(Config.surveyNumNights):
+            # decide which way to point tonight
+            NCoverage = self.NVisitsComplete / self.areaInNorth
+            SCoverage = self.SVisitsComplete / self.areaInSouth
+            ECoverage = self.EVisitsComplete / self.areaInEast
+            SECoverage = ((self.SVisitsComplete + self.EVisitsComplete) /
+                          (self.areaInSouth     + self.areaInEast))
+            #print "NCoverage", NCoverage
+            #print "SCoverage", SCoverage
+            #print "ECoverage", ECoverage
+            #print "SECoverage", SECoverage
+            if NCoverage < SECoverage:
+                nightDirection = NORTH
+            else:
+                nightDirection = SOUTHEAST
+
+
             # reset the slew times array
             self.curNightSlewTimes = []
             prevAltaz = None
             prevFilter = self.telescope.filters[0]
 
             # return each visit prescribed by scheduleNight()
-            for visit in self._scheduleNight(nightNum):
+            for visit in self._scheduleNight(nightNum, nightDirection):
                 radec = np.array([[visit.ra, visit.dec]])
                 altaz = AstronomicalSky.radec2altaz(radec, self.context.time())[0]
                 if prevAltaz is not None:
@@ -115,27 +132,18 @@ class Scheduler:
             while AstronomicalSky.nightNum(self.context.time()) == nightNum:
                 yield None
             if len(self.curNightSlewTimes) > 0:
-                self.estAvgSlewTime = np.mean(self.curNightSlewTimes)
+                if nightDirection == NORTH:
+                    self.NEstAvgSlewTime = np.mean(self.curNightSlewTimes)
+                elif nightDirection == SOUTHEAST:
+                    self.SEEstAvgSlewTime = np.mean(self.curNightSlewTimes)
 
-    def _scheduleNight(self, nightNum):
-        # decide which way to point tonight
-        NCoverage = self.NVisitsComplete / self.areaInNorth
-        SCoverage = self.SVisitsComplete / self.areaInSouth
-        ECoverage = self.EVisitsComplete / self.areaInEast
-        SECoverage = ((self.SVisitsComplete + self.EVisitsComplete) /
-                      (self.areaInSouth     + self.areaInEast))
-        #print "NCoverage", NCoverage
-        #print "SCoverage", SCoverage
-        #print "ECoverage", ECoverage
-        #print "SECoverage", SECoverage
-        if NCoverage < SECoverage:
-            nightDirection = NORTH
-        else:
-            nightDirection = SOUTHEAST
-
+    def _scheduleNight(self, nightNum, nightDirection):
         # figure out how many visits we'll probably do tonight
         nightLength = AstronomicalSky.nightLength(nightNum)
-        t = self.estAvgSlewTime + self.estAvgExpTime
+        if nightDirection == NORTH:
+            t = self.NEstAvgSlewTime + self.estAvgExpTime
+        elif nightDirection == SOUTHEAST:
+            t = self.SEEstAvgSlewTime + self.estAvgExpTime
         expectedNumVisits = int(nightLength / t)
         # TODO it might be greater than numVisits / 2 if we expect to
         # lose revisits due to weather. May model this at some point
@@ -246,7 +254,7 @@ class Scheduler:
             cutoffRa = raOfZenith + Config.zenithBuffer
             timesLeft = (EMinGroupRa - cutoffRa) * (3600*24) / (2*np.pi)
 
-            avgVisitTime = self.estAvgExpTime + self.estAvgSlewTime
+            avgVisitTime = self.estAvgExpTime + self.SEEstAvgSlewTime
             EScanTimes = np.array(map(len, EScans)) * avgVisitTime
 
             execTimes = EScanTimes[::2] * 2 + EScanTimes[1::2]
