@@ -139,7 +139,7 @@ class Simulator:
                 radec = np.array([[visit.ra, visit.dec]])
                 obsDecs.append(visit.dec)
                 altaz = AstronomicalSky.radec2altaz(radec, self.time())[0]
-                if alt < 0:
+                if altaz[0] < 0:
                     raise RuntimeError("Can't look at the ground!")
                 alts.append(altaz[0])
                 azes.append(altaz[1])
