@@ -47,7 +47,8 @@ class SummaryPlots:
         log.debug("sliced allVisitInfos")
         altazes = AS.radec2altaz(np.vstack([self.ras, self.decs]).T, times)
         self.alts = altazes[:,0]
-        self.azes = altazes[:,1]#.clip(0,2*np.pi)
+        self.azes = altazes[:,1]
+        self.azes[self.azes == 2*np.pi] = 0
 
         log.debug("got altazes")
 
@@ -111,7 +112,7 @@ class SummaryPlots:
 
     def dAirmassContour(self):
         # dAirmass = delta airmass = observed airmass - optimal airmass given dec
-        # first, create a polar plot with r = dAirmass and theta = azimuth
+        # first, create a polar plot with  = dAirmass and theta = azimuth
 
         # limits and resolution for dAirmass
         nDAirmass = 50
@@ -147,7 +148,7 @@ class SummaryPlots:
             rId = (dAirmass - minDAirmass) / (maxDAirmass - minDAirmass) * nDAirmass
             rId = int(rId)
 
-            thetaId  = int(az / (2*np.pi) * (nAzes-1))
+            thetaId  = int(az / (2*np.pi) * (nAzes))
             values[thetaId, rId] += 1
 
         # now show contour plots in polar coordinates where r is dAirmass
@@ -183,7 +184,7 @@ class SummaryPlots:
             # calculate offsets into r and theta
             rId = (zenithAngle - minZenith) / (maxZenith - minZenith) * nZenith
             rId = int(rId)
-            thetaId = int(az / (2*np.pi) * (nAzes-1))
+            thetaId = int(az / (2*np.pi) * (nAzes))
             values[thetaId, rId] += 1
 
         log.debug("got values")
