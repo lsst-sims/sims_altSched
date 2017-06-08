@@ -290,9 +290,11 @@ class Scheduler:
             elif scanDir == SOUTH:
                 sortedScan = sorted(scan, key=lambda v: -1*v.dec)
             elif scanDir == EAST:
-                sortedScan = sorted(scan, key=lambda v: v.ra)
+                (raMin, raMax) = self._getNightRaRange(nightNum)
+                sortedScan = sorted(scan, key=lambda v: (v.ra - raMin) % (2*np.pi))
             elif scanDir == WEST:
-                sortedScan = sorted(scan, key=lambda v: -1*v.ra)
+                (raMin, raMax) = self._getNightRaRange(nightNum)
+                sortedScan = sorted(scan, key=lambda v: -1 * (v.ra - raMin) % (2*np.pi))
             else:
                 raise RuntimeError("invalid direction " + str(scanDir))
 
