@@ -82,7 +82,6 @@ class Simulator:
 
         schedDownNights = parseSchedFile(schedFileName)
         unschedDownNights = parseSchedFile(unschedFileName)
-        print schedDownNights | unschedDownNights
         return schedDownNights | unschedDownNights
 
     def run(self, tel):
@@ -140,6 +139,8 @@ class Simulator:
                 radec = np.array([[visit.ra, visit.dec]])
                 obsDecs.append(visit.dec)
                 altaz = AstronomicalSky.radec2altaz(radec, self.time())[0]
+                if alt < 0:
+                    raise RuntimeError("Can't look at the ground!")
                 alts.append(altaz[0])
                 azes.append(altaz[1])
                 if not isNightYoung:
