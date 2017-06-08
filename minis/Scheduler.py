@@ -449,8 +449,9 @@ class Scheduler:
         # end of the world, and scans of constant width
         # should minimize slew times within the scans 
 
+        raMin, raMax = self._getNightRaRange(nightNum)
+        raRange = (raMax - raMin) % (2*np.pi)
         if direction == EAST:
-            raMin, raMax = self._getNightRaRange(nightNum)
             # easterly scans are offset past the zenith buffer zone
             # in RA by zenithBufferOffset
             raMin += Config.zenithBuffer + Config.zenithBufferOffset
@@ -470,7 +471,7 @@ class Scheduler:
                       |__________|__________|__________|
 
             """
-            dRa = ((raMax - raMin) % (2*np.pi)) / 3
+            dRa = raRange / 3
             ra0 = raMin
             ra1 = (raMin + dRa) % (2*np.pi)
             ra2 = (raMin + 2*dRa) % (2*np.pi)
@@ -491,25 +492,11 @@ class Scheduler:
 
 
         if direction == NORTH or direction == SOUTH:
-            raMin, raMax = self._getNightRaRange(nightNum)
-            raMid = raMin + ((raMax - raMin) % (2*np.pi)) / 2
+            raMid = raMin + raRange / 2
 
             validVisitPairs = [v for v in visitPairs 
                                if Utils.isRaInRange(v.ra, (raMin, raMax)) and
                                   self._directionOfDec(v.dec) == direction]
-
-            sphericalCoords = [[visitPair.ra, visitPair.dec]
-                               for visitPair in validVisitPairs]
-            sphericalCoords = np.array(sphericalCoords)
-            cartesianCoords = Utils.spherical2Cartesian(sphericalCoords[:,0], 
-                                                        sphericalCoords[:,1])
-
-            cartesianMid = Utils.spherical2Cartesian(raMid, 0)
-            displacementVector = np.cross(cartesianMid, [0,0,-1])
-            displacements = np.dot(displacementVector, cartesianCoords.T)
-
-            (minD, maxD) = (displacements.min(), displacements.max())
-            normedDisplacements = (displacements - minD) / (maxD - minD)
 
             # the field of view width should be approximately the average 
             # vertical distance between pointings in a scan unless we're
@@ -517,21 +504,46 @@ class Scheduler:
             # TODO decide how wide to make scans
             scanWidth = 2 * self.telescope.fovWidth
             # mod by 2pi in case raMax < raMin (if the range crosses ra=2pi)
-            numScans = ((raMax - raMin) % (2*np.pi)) / scanWidth
+            numScans = raRange / scanWidth
             numScans = int(numScans)
-            # make sure we have a multiple of N so we can do N visit scans followed
-            # by N revisit scans
+            # make sure we have a multiple of N so we can do N visit scans
+            # followed by N revisit scans
             # TODO parametrize N
             N = 2
             numScans = int(N * round(numScans / N))
 
-            # scans are ordered by increasing ra
-            scans = [set() for i in range(numScans)]
-            properScans = (normedDisplacements * numScans).astype(int)
-            # handle the case when normedDisplacements == maxD
-            properScans[np.where(properScans == numScans)] = numScans - 1
+            # how to divide the sky into scans: cartesian or spherical
+            divisionType = "spherical"
+            if divisionType == "cartesian":
+                sphericalCoords = [[visitPair.ra, visitPair.dec]
+                                   for visitPair in validVisitPairs]
+                sphericalCoords = np.array(sphericalCoords)
+                cartesianCoords = Utils.spherical2Cartesian(sphericalCoords[:,0],
+                                                            sphericalCoords[:,1])
 
-            for i, visitPair in enumerate(validVisitPairs):
-                scans[properScans[i]].add(visitPair)
+                cartesianMid = Utils.spherical2Cartesian(raMid, 0)
+                displacementVector = np.cross(cartesianMid, [0,0,-1])
+                displacements = np.dot(displacementVector, cartesianCoords.T)
+
+                (minD, maxD) = (displacements.min(), displacements.max())
+                normedDisplacements = (displacements - minD) / (maxD - minD)
+
+                # scans are ordered by increasing ra
+                scans = [set() for i in range(numScans)]
+                properScans = (normedDisplacements * numScans).astype(int)
+                # handle the case when normedDisplacements == maxD
+                properScans[np.where(properScans == numScans)] = numScans - 1
+
+                for i, visitPair in enumerate(validVisitPairs):
+                    scans[properScans[i]].add(visitPair)
+
+            elif divisionType == "spherical":
+                scans = [set() for i in range(numScans)]
+                for visitPair in validVisitPairs:
+                    dRa = (visitPair.ra - raMin) % (2*np.pi)
+                    scanId = int(dRa / raRange * numScans)
+                    if scanId == numScans:
+                        scanId = numScans - 1
+                    scans[scanId].add(visitPair)
 
             return scans
