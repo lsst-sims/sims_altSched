@@ -291,6 +291,8 @@ class Scheduler:
                 sortedScan = sorted(scan, key=lambda v: -1*v.dec)
             elif scanDir == EAST:
                 (raMin, raMax) = self._getNightRaRange(nightNum)
+                # subtract raMin so we never cross 2\pi (since a scan
+                # is never more than 2\pi radians long in RA)
                 sortedScan = sorted(scan, key=lambda v: (v.ra - raMin) % (2*np.pi))
             elif scanDir == WEST:
                 (raMin, raMax) = self._getNightRaRange(nightNum)
