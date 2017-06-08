@@ -18,11 +18,6 @@ class GraphicalMonitor:
         if mode not in supportedModes:
             raise ValueError("graphics mode " + str(mode) + " not supported")
 
-        # calculate ra_0: the ra of the zenith at Config.surveyStartTime
-        # this is used to make the zenith centered in the displayed image
-        self.ra0 = AstronomicalSky.altaz2radec(np.array([[np.pi/2, 0]]),
-                                               Config.surveyStartTime)[0,0]
-
         # resolution is (xNumPix, yNumPix)
         resolution = skyMap.getResolution()
         # just an estimate of what will look good
@@ -97,9 +92,11 @@ class GraphicalMonitor:
         startTime = Config.surveyStartTime
 
         # skyAngle is how far to rotate the sky to the right, so we
-        # need it to be 2pi - meridian since the ra of the meridian
-        # increases with time
-        skyAngle = 2*np.pi - AstronomicalSky.raOfMeridian(curTime - startTime)
+        # need it to be -\Delta meridian since the ra of the meridian
+        # increases with time (RA is higher in the East)
+        skyAngle = (AstronomicalSky.raOfMeridian(startTime) -
+                    AstronomicalSky.raOfMeridian(curTime))
+        skyAngle = (skyAngle - skyMap.ra0) % (2*np.pi)
 
         if self.mode == "nvisits":
             imdata = skyMap.getNVisitsMap(skyAngle)

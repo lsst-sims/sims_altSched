@@ -105,6 +105,8 @@ class SkyMap:
         self.xCenter = int((self.xMax - self.xMin) / 2)
         self.yCenter = int((self.yMax - self.yMin) / 2)
 
+        # calculate ra_0: the ra of the zenith at Config.surveyStartTime
+        # this is used to make the zenith centered in the displayed image
         self.ra0 = AstronomicalSky.altaz2radec(np.array([[np.pi/2, 0]]),
                                                Config.surveyStartTime)[0,0]
         # a list of all the pixels [y, x]
