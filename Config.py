@@ -13,6 +13,10 @@ surveyStartTime = 1640995200
 maxDec = np.radians(6.2)
 minDec = np.radians(-90)
 
+# Approximate width in RA of easterly scans
+# 30 degrees seems reasonable
+EScanWidth = np.radians(30)
+
 # buffer zone near the zenith to the N/S/E 
 # TODO these probably shouldn't change, so probably shouldn't be config vars
 tel = Telescope()

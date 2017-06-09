@@ -243,9 +243,10 @@ class Scheduler:
 
             EScansRas = [[v.ra for v in scan] for scan in EScans]
             EMinRas = np.array([min(ras) for ras in EScansRas])
-            # gives three numbers: the min RA from scans 1/2, 
-            # from scans 3/4, and 5/6
-            EMinGroupRa = EMinRas.reshape(3,2).T.min(axis=0)
+            numECols = int(len(EScans) / 2)
+            # EMinGroupRa is an array of numECols numbers: the min RA from
+            # scans 1/2, from scans 3/4, 5/6, etc.
+            EMinGroupRa = EMinRas.reshape(numECols,2).T.min(axis=0)
 
             # do as many southern pairs as we can before we have to
             # catch the E fields before they hit the zenith avoidance zone
@@ -257,30 +258,51 @@ class Scheduler:
             avgVisitTime = self.estAvgExpTime + self.SEEstAvgSlewTime
             EScanTimes = np.array(map(len, EScans)) * avgVisitTime
 
-            execTimes = EScanTimes[::2] * 2 + EScanTimes[1::2]
+            # this is the time available between when we start a pair of East
+            # scans and when we have to be done with those scans. It is NOT
+            # the amount of time it would take to complete each pair of East
+            # scans (that would be 2 * (EScanTimes[::2] + EScanTimes[1::2]))
+            # but rather the time to do the South scan once and the North scan
+            # twice, since at that point we're headed back East again so are no
+            # longer worried about hitting the zenith avoid zone
+            execTimes = 2 * EScanTimes[::2] + EScanTimes[1::2]
 
+            # now combine the South and East scans together in a good order
+            # into the scans, filterIds, and scanDirs arrays
             scans = []
             filterIds = []
             scanDirs = []
             cumTime = 0
+            # j keeps track of which East scan we should add next
             j = 0
+            # continue adding Southern scans until we need to add an East scan
+            # (i.e. if we added another South scan before the next East scan,
+            #  we wouldn't have time to complete the East scan before it hit
+            #  the zenith avoidance zone)
             for i in range(0, len(SScans), 2):
+                # consider whether to add Southern scan i
                 numNewVisits = len(SScans[i]) + len(SScans[i+1])
+                # this is how long it would take us to complete the next
+                # Southern scan
                 cumTime += 2 * numNewVisits * avgVisitTime
-                if j <= 2 and cumTime > timesLeft[j] - execTimes[j]:
+                # add an East scan first if we've run out of time
+                if j < numECols and cumTime > timesLeft[j] - execTimes[j]:
                     scans += [EScans[2*j], EScans[2*j+1], EScans[2*j], EScans[2*j+1]]
                     scanDirs += [WEST, EAST, WEST, EAST]
                     for _ in range(4):
                         filterIds.append(EFilterIds.pop(0))
                     ENumNewVisits = len(EScans[2*j]) + len(EScans[2*j+1])
                     cumTime += 2 * ENumNewVisits * avgVisitTime
-                    #cumTime += execTimes[j]
                     j += 1
+                # now add the South scan. Note this assumes that we never need
+                # to add two East scans in a row in order to keep out of the
+                # zenith avoidance region, which seems like a reasonable assumption
                 scans += [SScans[i], SScans[i+1], SScans[i], SScans[i+1]]
                 scanDirs += [SOUTH, NORTH, SOUTH, NORTH]
                 for _ in range(4):
                     filterIds.append(SFilterIds.pop(0))
-            if j != 3:
+            # we should have added all the East scans by now
+            if j != numECols:
                 raise RuntimeWarning("j=" + str(j) + "!")
 
         for scan, scanDir, filterId in zip(scans, scanDirs, filterIds):
@@ -458,40 +480,47 @@ class Scheduler:
         if direction == EAST:
             # easterly scans are offset past the zenith buffer zone
             # in RA by zenithBufferOffset
-            raMin += Config.zenithBuffer + Config.zenithBufferOffset
-            raMax += Config.zenithBuffer + Config.zenithBufferOffset
+            ERaMin = raMin + Config.zenithBuffer + Config.zenithBufferOffset
+            ERaMax = raMin + Config.zenithBuffer + Config.zenithBufferOffset
 
             validVisitPairs = [v for v in visitPairs
-                               if Utils.isRaInRange(v.ra, (raMin, raMax)) and
+                               if Utils.isRaInRange(v.ra, (ERaMin, ERaMax)) and
                                self._directionOfDec(v.dec) == direction]
 
-            # there are six total scans in a 2x3 grid
+            numCols = int(raRange / Config.EScanWidth)
+            # there are 2*numCols total scans in a 2xnumCols grid
             """
-                       _________________________________
-              __      |  Scan 1  |  Scan 3  |  Scan 5  |
+                       ______________________________________
+              __      |  Scan 1  |  Scan 3  |  Scan 5  | ...
              /  \     |          |          |          |
-             |  |     ----------------------------------
-             \__/     |  Scan 2  |  Scan 4  |  Scan 6  |
-                      |__________|__________|__________|
+             |  |     --------------------------------------
+             \__/     |  Scan 2  |  Scan 4  |  Scan 6  | ...
+                      |__________|__________|__________|_____
 
             """
-            dRa = raRange / 3
-            ra0 = raMin
-            ra1 = (raMin + dRa) % (2*np.pi)
-            ra2 = (raMin + 2*dRa) % (2*np.pi)
-            ra3 = raMax
+            dRa = raRange / numCols
+            leftEdges = [(ERaMin + k * dRa) % (2*np.pi) for k in range(numCols)]
             def assignScans(minRa, maxRa, isNorth):
-                scan = [v for v in visitPairs 
+                # create a scan populated with visit pairs extending from minRa
+                # to maxRa, where the scan contains VisitPairs to the North of
+                # Telescope.latitude if isNorth is True else to the South
+                scan = [v for v in validVisitPairs
                         if Utils.isRaInRange(v.ra, (minRa, maxRa)) and
                          ( (v.dec > self.telescope.latitude and isNorth) or
                            (v.dec < self.telescope.latitude and not isNorth) )]
                 return set(scan)
-            scans = [assignScans(ra0, ra1, True),
-                     assignScans(ra0, ra1, False),
-                     assignScans(ra1, ra2, True),
-                     assignScans(ra1, ra2, False),
-                     assignScans(ra2, ra3, True),
-                     assignScans(ra2, ra3, False)]
+
+            scans = []
+            # make all scans except for the last
+            for k in range(numCols - 1):
+                # for each column (i.e. Scan 1  and Scan 2), add one Scan in
+                # the North and another in the South
+                scans.append(assignScans(leftEdges[k], leftEdges[k+1], True))
+                scans.append(assignScans(leftEdges[k], leftEdges[k+1], False))
+            # make the farthest East scan (highest RA)
+            scans.append(assignScans(leftEdges[numCols-1], ERaMax, True))
+            scans.append(assignScans(leftEdges[numCols-1], ERaMax, False))
+
             return scans
 
 
