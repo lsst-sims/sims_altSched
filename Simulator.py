@@ -121,16 +121,10 @@ class Simulator:
         for visit in sched.schedule():
 
             perNight, deltaI = self.getUpdateRate(i)
-            if showDisp and ((    perNight and isNightYoung) or
-                             (not perNight and i - prevI >= deltaI)):
-                display.updateDisplay(skyMap, self.curTime)
-                prevI = i
-                if saveMovie:
-                    display.saveFrame("images/pygame/%07d.png" % i)
-
             if isNightYoung:
                 print "Night:", nightNum, "\r",
                 sys.stdout.flush()
+
             # if visit is None, that means the scheduler ran out of places
             # to point for the night
             if visit is not None:
@@ -150,6 +144,14 @@ class Simulator:
                 # notify the display of the visit
                 if trackMap:
                     skyMap.addVisit(visit, self.curTime)
+
+            if showDisp and ((    perNight and isNightYoung) or
+                             (not perNight and i - prevI >= deltaI)):
+                display.updateDisplay(skyMap, self.curTime)
+                prevI = i
+                if saveMovie:
+                    display.saveFrame("images/pygame/%07d.png" % i)
+
 
             # plot the azimuth at each time step
             if plotAzes:
@@ -174,15 +176,14 @@ class Simulator:
                 sched.notifyVisitComplete(visit, self.time())
 
                 # keep track of revisit times
-                visitPair = visit.visitPair
-                if visitPair.visit1.isComplete and visitPair.visit2.isComplete:
-                    revisitTimes.append(np.abs(visitPair.visit1.timeOfCompletion - \
-                                               visitPair.visit2.timeOfCompletion))
+                visit1 = visit.visitPair.visit1
+                visit2 = visit.visitPair.visit2
+                if visit1.isComplete and visit2.isComplete:
+                    revisitTimes.append(np.abs(visit1.timeOfCompletion - \
+                                               visit2.timeOfCompletion))
                 prevAltaz = altaz
                 prevFilter = visit.filter
 
-            if isNightYoung and showDisp and clearDisplayNightly:
-                skyMap.clear()
             # process the end of the night if necessary
             if self.curTime < AstronomicalSky.nightEnd(nightNum):
                 isNightYoung = False
@@ -192,6 +193,8 @@ class Simulator:
                     nightNum += 1
                 self.curTime = AstronomicalSky.nightStart(nightNum)
                 isNightYoung = True
+                if showDisp and clearDisplayNightly:
+                    skyMap.clear()
 
             i += 1
             if nightNum > (365/12):
@@ -208,7 +211,9 @@ class Simulator:
         plt.title("Average Revisit Times (in minutes)")
         plt.imshow(avgRevisitTimes/60)
         plt.colorbar()
+        """
 
+        """
         revisitTimesMap = skyMap.getRevisitMap()
         allRevisitTimes = []
         for pix in revisitTimesMap.flatten():
