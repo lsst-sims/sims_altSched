@@ -285,8 +285,9 @@ class Scheduler:
                 # this is how long it would take us to complete the next
                 # Southern scan
                 cumTime += 2 * numNewVisits * avgVisitTime
+                paddedTime = cumTime + 0.1 * numNewVisits * avgVisitTime
                 # add an East scan first if we've run out of time
-                if j < numECols and cumTime > timesLeft[j] - execTimes[j]:
+                if j < numECols and paddedTime > timesLeft[j] - execTimes[j]:
                     scans += [EScans[2*j], EScans[2*j+1], EScans[2*j], EScans[2*j+1]]
                     scanDirs += [WEST, EAST, WEST, EAST]
                     for _ in range(4):
