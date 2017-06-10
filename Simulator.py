@@ -136,7 +136,7 @@ class Simulator:
                 if altaz[0] < 0:
                     raise RuntimeError("Can't look at the ground!")
                 if altaz[0] > tel.maxAlt:
-                    raise RuntimeWarning("Tried to observe in zenith avoid zone")
+                    print "Warning: tried to observe in zenith avoid zone"
                     continue
                 alts.append(altaz[0])
                 azes.append(altaz[1])
