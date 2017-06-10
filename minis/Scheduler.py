@@ -32,8 +32,8 @@ class Scheduler:
 
         # these estimates get updated at the end of each night
         # (currently estAvgExpTime is not updated)
-        self.NEstAvgSlewTime = 7 # seconds
-        self.SEEstAvgSlewTime = 7 # seconds
+        self.NEstAvgSlewTime = 8 # seconds
+        self.SEEstAvgSlewTime = 8 # seconds
         self.estAvgExpTime = 30 #seconds
 
         # keep track of how long we spend slewing each night
@@ -109,7 +109,6 @@ class Scheduler:
                 nightDirection = NORTH
             else:
                 nightDirection = SOUTHEAST
-
 
             # reset the slew times array
             self.curNightSlewTimes = []
@@ -482,7 +481,7 @@ class Scheduler:
             # easterly scans are offset past the zenith buffer zone
             # in RA by zenithBufferOffset
             ERaMin = raMin + Config.zenithBuffer + Config.zenithBufferOffset
-            ERaMax = raMin + Config.zenithBuffer + Config.zenithBufferOffset
+            ERaMax = raMax + Config.zenithBuffer + Config.zenithBufferOffset
 
             validVisitPairs = [v for v in visitPairs
                                if Utils.isRaInRange(v.ra, (ERaMin, ERaMax)) and
@@ -500,28 +499,17 @@ class Scheduler:
 
             """
             dRa = raRange / numCols
-            leftEdges = [(ERaMin + k * dRa) % (2*np.pi) for k in range(numCols)]
-            def assignScans(minRa, maxRa, isNorth):
-                # create a scan populated with visit pairs extending from minRa
-                # to maxRa, where the scan contains VisitPairs to the North of
-                # Telescope.latitude if isNorth is True else to the South
-                scan = [v for v in validVisitPairs
-                        if Utils.isRaInRange(v.ra, (minRa, maxRa)) and
-                         ( (v.dec > self.telescope.latitude and isNorth) or
-                           (v.dec < self.telescope.latitude and not isNorth) )]
-                return set(scan)
-
-            scans = []
-            # make all scans except for the last
-            for k in range(numCols - 1):
-                # for each column (i.e. Scan 1  and Scan 2), add one Scan in
-                # the North and another in the South
-                scans.append(assignScans(leftEdges[k], leftEdges[k+1], True))
-                scans.append(assignScans(leftEdges[k], leftEdges[k+1], False))
-            # make the farthest East scan (highest RA)
-            scans.append(assignScans(leftEdges[numCols-1], ERaMax, True))
-            scans.append(assignScans(leftEdges[numCols-1], ERaMax, False))
-
+            scans = [set() for i in range(numCols*2)]
+            for v in validVisitPairs:
+                col = int(((v.ra - ERaMin) % (2*np.pi)) / dRa)
+                if col == numCols:
+                    col -= 1
+                scanId = col * 2
+                if v.dec < self.telescope.latitude:
+                    scanId += 1
+                if scanId > len(scans):
+                    print scanId, ERaMin, ERaMax, v.ra, v.dec
+                scans[scanId].add(v)
             return scans
 
 
