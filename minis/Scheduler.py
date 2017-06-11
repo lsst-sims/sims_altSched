@@ -93,48 +93,47 @@ class Scheduler:
 
         return filterIds
 
-    def schedule(self):
-        for nightNum in range(Config.surveyNumNights):
-            # decide which way to point tonight
-            NCoverage = self.NVisitsComplete / self.areaInNorth
-            SCoverage = self.SVisitsComplete / self.areaInSouth
-            ECoverage = self.EVisitsComplete / self.areaInEast
-            SECoverage = ((self.SVisitsComplete + self.EVisitsComplete) /
-                          (self.areaInSouth     + self.areaInEast))
-            #print "NCoverage", NCoverage
-            #print "SCoverage", SCoverage
-            #print "ECoverage", ECoverage
-            #print "SECoverage", SECoverage
-            if NCoverage < SECoverage:
-                nightDirection = NORTH
-            else:
-                nightDirection = SOUTHEAST
+    def scheduleNight(self, nightNum):
+        # decide which way to point tonight
+        NCoverage = self.NVisitsComplete / self.areaInNorth
+        SCoverage = self.SVisitsComplete / self.areaInSouth
+        ECoverage = self.EVisitsComplete / self.areaInEast
+        SECoverage = ((self.SVisitsComplete + self.EVisitsComplete) /
+                      (self.areaInSouth     + self.areaInEast))
+        #print "NCoverage", NCoverage
+        #print "SCoverage", SCoverage
+        #print "ECoverage", ECoverage
+        #print "SECoverage", SECoverage
+        if NCoverage < SECoverage:
+            nightDirection = NORTH
+        else:
+            nightDirection = SOUTHEAST
 
-            # reset the slew times array
-            self.curNightSlewTimes = []
-            prevAltaz = None
-            prevFilter = self.telescope.filters[0]
+        # reset the slew times array
+        self.curNightSlewTimes = []
+        prevAltaz = None
+        prevFilter = self.telescope.filters[0]
 
-            # return each visit prescribed by scheduleNight()
-            for visit in self._scheduleNight(nightNum, nightDirection):
-                radec = np.array([[visit.ra, visit.dec]])
-                altaz = AstronomicalSky.radec2altaz(radec, self.context.time())[0]
-                if prevAltaz is not None:
-                    slewTime = self.telescope.calcSlewTime(prevAltaz, prevFilter,
-                                                           altaz, visit.filter)
-                    self.curNightSlewTimes.append(slewTime)
-                prevAltaz = altaz
-                prevFilter = visit.filter
-                yield visit
-            # if the night isn't over and we've exhausted the visits in 
-            # self._scheduleNight, return None until the next night starts
-            while AstronomicalSky.nightNum(self.context.time()) == nightNum:
-                yield None
-            if len(self.curNightSlewTimes) > 0:
-                if nightDirection == NORTH:
-                    self.NEstAvgSlewTime = np.mean(self.curNightSlewTimes)
-                elif nightDirection == SOUTHEAST:
-                    self.SEEstAvgSlewTime = np.mean(self.curNightSlewTimes)
+        # return each visit prescribed by scheduleNight()
+        for visit in self._scheduleNight(nightNum, nightDirection):
+            radec = np.array([[visit.ra, visit.dec]])
+            altaz = AstronomicalSky.radec2altaz(radec, self.context.time())[0]
+            if prevAltaz is not None:
+                slewTime = self.telescope.calcSlewTime(prevAltaz, prevFilter,
+                                                       altaz, visit.filter)
+                self.curNightSlewTimes.append(slewTime)
+            prevAltaz = altaz
+            prevFilter = visit.filter
+            yield visit
+        # if the night isn't over and we've exhausted the visits in
+        # self._scheduleNight, return None until the next night starts
+        while AstronomicalSky.nightNum(self.context.time()) == nightNum:
+            yield None
+        if len(self.curNightSlewTimes) > 0:
+            if nightDirection == NORTH:
+                self.NEstAvgSlewTime = np.mean(self.curNightSlewTimes)
+            elif nightDirection == SOUTHEAST:
+                self.SEEstAvgSlewTime = np.mean(self.curNightSlewTimes)
 
     def _scheduleNight(self, nightNum, nightDirection):
         # figure out how many visits we'll probably do tonight

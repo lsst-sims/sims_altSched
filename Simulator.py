@@ -17,11 +17,10 @@ from matplotlib import pyplot as plt
 from SummaryPlots import SummaryPlots
 
 trackMap = True
-showDisp = True
+showDisp = True and trackMap
 saveMovie = False
-plotAzes = False
 showSummaryPlots = True
-clearDisplayNightly = False
+clearDisplayNightly = True
 writeCsv = False
 
 assert(not (showDisp and not trackMap))
@@ -29,14 +28,16 @@ assert(not (showDisp and not trackMap))
 # TODO plot azimuth vs time
 # change filters every revisit set (revisits 1 hour, change every 2 hours)
 # add in settle time
+surveyYears = 10
 
 class Simulator:
     def __init__(self):
-        self.startTime = Config.surveyStartTime
-        self.curTime = self.startTime
+        self.curTime = AstronomicalSky.nightStart(1)
 
     @staticmethod
-    def getUpdateRate(i):
+    def getUpdateRate(nightNum, i):
+        # TODO hacky -- assume 1000 visits/night to create an "effective" i
+        i = nightNum * 1000 + i
         # decide how often to update the display so we can get
         # a speeding up effect
         perNight = False
@@ -85,131 +86,48 @@ class Simulator:
         return schedDownNights | unschedDownNights
 
     def run(self, tel):
+        self.tel = tel
+
         downtimeNights = self.parseDowntime()
-        totalNVisits = 0
-        sched = Scheduler(telescope=tel, context=self)
+        self.sched = Scheduler(telescope=self.tel, context=self)
 
         # resScale is proportional to the resolution (and therefore the speed)
         if trackMap:
-            skyMap = SkyMap(telescope=tel, resScale=2)
+            self.skyMap = SkyMap(telescope=self.tel, resScale=6)
         if showDisp:
-            display = GraphicalMonitor(skyMap=skyMap, mode="filters")
+            self.display = GraphicalMonitor(skyMap=self.skyMap, mode="nvisits")
        
-        nightNum = 0
-        isNightYoung = True
+        self.slewTimes = []
+        self.revisitTimes = []
 
-        slewTimes = []
-        revisitTimes = []
-
-        # keep track of the alt and az of each visit
-        alts = []
-        azes = []
-        obsDecs = []
-        if plotAzes:
-            plt.clf()
-            plt.xlabel("visit number")
-            plt.ylabel("azimuth (degrees)")
-            plt.ylim(0, 360)
-            plt.ion()
-            plt.show()
-
-        i = 0
-        prevI = i
+        # write the header to the output file if writeCsv flag is set
         if writeCsv:
-            outFile = open("sim_results.csv", "w")
+            outFile = open("results/downtime_nightlen.csv", "w")
             outFile.write("time (unix), ra (rads), dec (rads), filter\n")
-        for visit in sched.schedule():
 
-            perNight, deltaI = self.getUpdateRate(i)
-            if isNightYoung:
-                print "Night:", nightNum, "\r",
-                sys.stdout.flush()
+        numSimulatedNights = int(surveyYears * 365.25)
+        for nightNum in range(numSimulatedNights):
+            print "Night:", nightNum, "\r",
+            sys.stdout.flush()
+            if nightNum in downtimeNights:
+                continue
+            self.simulateNight(nightNum)
 
-            # if visit is None, that means the scheduler ran out of places
-            # to point for the night
-            if visit is not None:
-                totalNVisits += 1
-                # keep track of the alt and az of each visit
-                radec = np.array([[visit.ra, visit.dec]])
-                obsDecs.append(visit.dec)
-                altaz = AstronomicalSky.radec2altaz(radec, self.time())[0]
-                if altaz[0] < 0:
-                    raise RuntimeError("Can't look at the ground!")
-                if altaz[0] > tel.maxAlt:
-                    print "Warning: tried to observe in zenith avoid zone"
-                    continue
-                alts.append(altaz[0])
-                azes.append(altaz[1])
-                if not isNightYoung:
-                    slewTime = tel.calcSlewTime(prevAltaz, prevFilter,
-                                                altaz, visit.filter)
-
-                # notify the display of the visit
-                if trackMap:
-                    skyMap.addVisit(visit, self.curTime)
-
-            if showDisp and ((    perNight and isNightYoung) or
-                             (not perNight and i - prevI >= deltaI)):
-                display.updateDisplay(skyMap, self.curTime)
-                prevI = i
-                if saveMovie:
-                    display.saveFrame("images/pygame/%07d.png" % i)
-
-
-            # plot the azimuth at each time step
-            if plotAzes:
-                plt.scatter(range(len(azes)), np.degrees(azes))
-                plt.draw()
-                plt.pause(0.01)
-
-            if visit is None:
-                self.curTime += 30
-            else:
-                # add the exposure time of this visit to the current time
-                expTime = AstronomicalSky.getExpTime(visit.ra, visit.dec)
-                self.curTime += expTime
-                if not isNightYoung:
-                    self.curTime += slewTime
-                    slewTimes.append(slewTime)
-                if writeCsv:
-                    outFile.write(str(self.time()) + "," + \
-                                  str(visit.ra) + "," + \
-                                  str(visit.dec) + "," + \
-                                  visit.filter + "\n")
-                sched.notifyVisitComplete(visit, self.time())
-
-                # keep track of revisit times
-                visit1 = visit.visitPair.visit1
-                visit2 = visit.visitPair.visit2
-                if visit1.isComplete and visit2.isComplete:
-                    revisitTimes.append(np.abs(visit1.timeOfCompletion - \
-                                               visit2.timeOfCompletion))
-                prevAltaz = altaz
-                prevFilter = visit.filter
-
-            # process the end of the night if necessary
-            if self.curTime < AstronomicalSky.nightEnd(nightNum):
-                isNightYoung = False
-            else:
-                nightNum += 1
-                while nightNum in downtimeNights:
-                    nightNum += 1
-                self.curTime = AstronomicalSky.nightStart(nightNum)
-                isNightYoung = True
-                if showDisp and clearDisplayNightly:
-                    skyMap.clear()
-
-            i += 1
-            if nightNum > (365/12):
-                break
+            # the clearDisplayNightly flag indicates we should clear
+            # the skymap at the end of each night
+            if showDisp and clearDisplayNightly:
+                self.skyMap.clear()
 
         if writeCsv:
             outFile.close()
+
+        # we're done with the simulation now unless we have to show
+        # the summary plots
         if not showSummaryPlots:
             return
 
         """
-        avgRevisitTimes = skyMap.getAvgRevisitMap()
+        avgRevisitTimes = self.skyMap.getAvgRevisitMap()
         plt.figure("revisit times")
         plt.title("Average Revisit Times (in minutes)")
         plt.imshow(avgRevisitTimes/60)
@@ -217,7 +135,7 @@ class Simulator:
         """
 
         """
-        revisitTimesMap = skyMap.getRevisitMap()
+        revisitTimesMap = self.skyMap.getRevisitMap()
         allRevisitTimes = []
         for pix in revisitTimesMap.flatten():
             # some entries might be zeros
@@ -228,45 +146,123 @@ class Simulator:
         plt.title("Per-Pixel Revisit Times")
         plt.xlabel("Time (hours)")
         plt.ylabel("Cumulative number of visits (normalized)")
+        """
 
-        plt.figure("% Visits not accompanied by a revisit within 45 minutes")
-        percentLonelyMap = skyMap.getLonelinessMap(cutoffMins=45)
-        plt.title("Percent of visits with no revisit within 45 minutes")
+        plt.figure("% Visits not accompanied by a revisit within 45 minutes (real hrs)")
+        percentLonelyMap = self.skyMap.getLonelinessMap(cutoffMins=45)
+        plt.title("Fraction of visits with no revisit within 45 minutes")
         plt.imshow(percentLonelyMap)
         plt.clim(0,0.4)
         plt.colorbar()
 
+        """
         for percentile in [10, 50, 75, 90, 95, 99]:
             plt.figure(str(percentile) + "th percentile revisit time")
-            percentileMap = skyMap.getPercentileMap(percentile)
+            percentileMap = self.skyMap.getPercentileMap(percentile)
             plt.title(str(percentile) + "th percentile revisit time (in days)")
             plt.imshow(percentileMap / 3600 / 24)
             plt.clim(0,7)
             plt.colorbar()
-
-        azes = np.array(azes) % (2*np.pi)
         """
 
-        plotter = SummaryPlots(skyMap, slewTimes = slewTimes)
 
-        print "avg slew time", np.mean(slewTimes), "seconds"
-        print "median slew time", np.median(slewTimes), "seconds"
-        plotter.slewHist()
+        plotter = SummaryPlots(self.skyMap, slewTimes = self.slewTimes)
+
+        print "avg slew time", np.mean(self.slewTimes), "seconds"
+        print "median slew time", np.median(self.slewTimes), "seconds"
+        #plotter.slewHist()
         
-        sortedTimes = np.sort(slewTimes)
-        cum = np.cumsum(sortedTimes)
-        print "total cumulative slew time: ", cum[-1]
-        print "rank @ half total cum / # slews", np.searchsorted(cum, cum[-1]/2) / len(cum)
-        plotter.slewRankCum()
+        #sortedTimes = np.sort(self.slewTimes)
+        #cum = np.cumsum(sortedTimes)
+        #print "total cumulative slew time: ", cum[-1]
+        #print "rank @ half total cum / # slews", np.searchsorted(cum, cum[-1]/2) / len(cum)
+        #plotter.slewRankCum()
         
-        print "avg revisit time", np.mean(np.array(revisitTimes)/60), "minutes"
-        plotter.revisitHist()
+        print "avg revisit time", np.mean(np.array(self.revisitTimes)/60), "minutes"
+        #plotter.revisitHist()
         
         plotter.dAirmassCum()
-        plotter.dAirmassContour()
-        plotter.airmassHist()
+        #plotter.dAirmassContour()
+        plotter.zenithAngleContour()
+        #plotter.airmassHist()
 
         plotter.show()
+
+    def simulateNight(self, nightNum):
+        nightStart = AstronomicalSky.nightStart(nightNum)
+        nightEnd   = AstronomicalSky.nightEnd(nightNum)
+
+        # start out the simulation at the beginning of the night
+        self.curTime = nightStart
+
+        # prevI is the last value of i when we updated the display
+        prevI = 0
+
+        # prevFilter is the filter of the last visit
+        prevFilter = ''
+        for i, visit in enumerate(self.sched.scheduleNight(nightNum)):
+            perNight, deltaI = self.getUpdateRate(nightNum, i)
+
+            # if visit is None, that means the scheduler ran out of places
+            # to point for the night
+            if visit is None:
+                self.curTime += 30
+            else:
+                radec = np.array([[visit.ra, visit.dec]])
+                altaz = AstronomicalSky.radec2altaz(radec, self.time())[0]
+                # make sure this az is a valid place to look
+                if altaz[0] < 0:
+                    raise RuntimeError("Can't look at the ground!")
+                if altaz[0] > self.tel.maxAlt:
+                    print "Warning: tried to observe in zenith avoid zone"
+                    continue
+
+                # figure out how far we have to slew
+                if i > 0:
+                    slewTime = self.tel.calcSlewTime(prevAltaz, prevFilter,
+                                                     altaz, visit.filter)
+
+                # notify the skyMap of the visit
+                if trackMap:
+                    self.skyMap.addVisit(visit, self.curTime)
+
+                # add the exposure time of this visit to the current time
+                expTime = AstronomicalSky.getExpTime(visit.ra, visit.dec)
+                self.curTime += expTime
+                if i > 0:
+                    self.curTime += slewTime
+                    self.slewTimes.append(slewTime)
+                if writeCsv:
+                    outFile.write(str(self.time()) + "," + \
+                                  str(visit.ra) + "," + \
+                                  str(visit.dec) + "," + \
+                                  visit.filter + "\n")
+                # let the scheduler know we "carried out" this visit
+                self.sched.notifyVisitComplete(visit, self.time())
+
+                # keep track of revisit times
+                visit1 = visit.visitPair.visit1
+                visit2 = visit.visitPair.visit2
+                if visit1.isComplete and visit2.isComplete:
+                    self.revisitTimes.append(np.abs(visit1.timeOfCompletion - \
+                                                    visit2.timeOfCompletion))
+                prevAltaz = altaz
+                prevFilter = visit.filter
+
+
+            # now that we've added the visit (if there was one),
+            # update the display
+            if showDisp and ((    perNight and i == 0) or
+                             (not perNight and i - prevI >= deltaI)):
+                self.display.updateDisplay(self.skyMap, self.curTime)
+                prevI = i
+                # save each frame if the saveMovie flag is set
+                if saveMovie:
+                    self.display.saveFrame("images/pygame/%07d.png" % i)
+
+            # process the end of the night if necessary
+            if self.curTime > nightEnd:
+                return
 
     def time(self):
         return self.curTime
