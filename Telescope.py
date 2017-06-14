@@ -1,6 +1,5 @@
 from __future__ import division
 import numpy as np
-from astropy import units as u
 
 class Telescope:
     # non-configurable (AstronomicalSky uses these and I don't
@@ -56,9 +55,7 @@ class Telescope:
         self.filterChangeTime = 120
 
     def calcSlewTime(self, altaz1, filter1, altaz2, filter2):
-        # assume that we don't have to worry about the dome slew time
-        # (might be reasonable if we never do long slews)
-        # FYI this takes on the order of 10us for 1 slew calculation (longer now)
+        # FYI this takes on the order of 10us for 1 slew calculation
 
         # TODO also assumes we never max out the cable wrap-around constraint
         deltaAlt = np.abs(altaz2[0] - altaz1[0])

@@ -45,7 +45,10 @@ class SummaryPlots:
         self.filters = allVisitInfos[:,3].astype("S1")
 
         log.debug("sliced allVisitInfos")
-        altazes = AS.radec2altaz(np.vstack([self.ras, self.decs]).T, times)
+        altazes = []
+        for ra, dec, time in zip(self.ras, self.decs, times):
+            altazes.append(AS.radec2altaz(np.array([[ra,dec]]), time))
+        altazes = np.vstack(altazes)
         self.alts = altazes[:,0]
         self.azes = altazes[:,1]
         self.azes[self.azes == 2*np.pi] = 0

@@ -1,3 +1,5 @@
+from __future__ import division
+
 import numpy as np
 from astropy.time import Time
 import multiprocessing as mp
@@ -16,9 +18,8 @@ def isRaInRange(ra, (minRa, maxRa)):
     else:
         return minRa < ra or  ra < maxRa
 
-def mjd(timestamp):
-    t = Time(timestamp, format="unix")
-    return t.mjd
+def unix2mjd(timestamp):
+    return timestamp / 86400 + 40587
 
 def timetsamp(mjd):
     t = Time(mjd, format="mjd")
