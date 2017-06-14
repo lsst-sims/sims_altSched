@@ -481,6 +481,8 @@ class Scheduler:
             # in RA by zenithBufferOffset
             ERaMin = raMin + Config.zenithBuffer + Config.zenithBufferOffset
             ERaMax = raMax + Config.zenithBuffer + Config.zenithBufferOffset
+            ERaMin %= 2*np.pi
+            ERaMax %= 2*np.pi
 
             validVisitPairs = [v for v in visitPairs
                                if Utils.isRaInRange(v.ra, (ERaMin, ERaMax)) and
