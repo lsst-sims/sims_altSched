@@ -70,6 +70,14 @@ def raOfMeridian(time):
     radec = altaz2radec(altaz, time)
     return radec[0,0]
 
+def radecOfMoon(time):
+    moon = ephem.Moon(Utils.mjd2djd(Utils.unix2mjd(time)))
+    return (moon.ra, moon.dec)
+
+def phaseOfMoon(time):
+    moon = ephem.Moon(Utils.mjd2djd(Utils.unix2mjd(time)))
+    return moon.moon_phase
+
 def getExpTime(ra, dec, otherstuff = None):
     return 30
 
