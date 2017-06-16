@@ -111,18 +111,18 @@ class Scheduler:
 
         # reset the slew times array
         self.curNightSlewTimes = []
-        prevAltaz = None
+        prevAlt = prevAz = None
         prevFilter = self.telescope.filters[0]
 
         # return each visit prescribed by scheduleNight()
         for visit in self._scheduleNight(nightNum, nightDirection):
-            radec = np.array([[visit.ra, visit.dec]])
-            altaz = AstronomicalSky.radec2altaz(radec, self.context.time())[0]
-            if prevAltaz is not None:
-                slewTime = self.telescope.calcSlewTime(prevAltaz, prevFilter,
-                                                       altaz, visit.filter)
+            alt, az = AstronomicalSky.radec2altaz(visit.ra, visit.dec, self.context.time())
+            if prevAlt is not None:
+                slewTime = self.telescope.calcSlewTime(prevAlt, prevAz, prevFilter,
+                                                       alt, az, visit.filter)
                 self.curNightSlewTimes.append(slewTime)
-            prevAltaz = altaz
+            prevAlt = alt
+            prevAz = az
             prevFilter = visit.filter
             yield visit
         # if the night isn't over and we've exhausted the visits in
@@ -248,8 +248,8 @@ class Scheduler:
 
             # do as many southern pairs as we can before we have to
             # catch the E fields before they hit the zenith avoidance zone
-            zenith = np.array([[np.pi/2, 0]])
-            raOfZenith = AstronomicalSky.altaz2radec(zenith, self.context.time())[0,0]
+            raOfZenith, _ = AstronomicalSky.altaz2radec(np.pi/2, 0,
+                                                        self.context.time())
             cutoffRa = raOfZenith + Config.zenithBuffer
             timesLeft = (EMinGroupRa - cutoffRa) * (3600*24) / (2*np.pi)
 

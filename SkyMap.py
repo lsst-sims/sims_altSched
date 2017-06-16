@@ -12,6 +12,7 @@ import itertools
 import palpy
 
 class SkyMap:
+    # TODO change radec, imdata to ra/dec, y/x or something
     def radec2imdata(self, radec):
         """
         This method takes in pixels in the form (RA, DEC) and returns
@@ -50,9 +51,11 @@ class SkyMap:
         Converts alt/az to indices into the imdata array at the time
         specified by Config.surveyStartTime
         """
-        radec = AstronomicalSky.altaz2radec(altaz, Config.surveyStartTime)
-        radec[:,0] -= self.ra0
-        return self.radec2imdata(radec)
+        alt = altaz[:,0]
+        az = altaz[:,1]
+        ra, dec = AstronomicalSky.altaz2radec(alt, az, Config.surveyStartTime)
+        ra -= self.ra0
+        return self.radec2imdata(np.vstack([ra, dec]).T)
 
     def imdata2altaz(self, imdata):
         """
@@ -107,8 +110,8 @@ class SkyMap:
 
         # calculate ra_0: the ra of the zenith at Config.surveyStartTime
         # this is used to make the zenith centered in the displayed image
-        self.ra0 = AstronomicalSky.altaz2radec(np.array([[np.pi/2, 0]]),
-                                               Config.surveyStartTime)[0,0]
+        self.ra0 = AstronomicalSky.altaz2radec(np.pi/2, 0.,
+                                               Config.surveyStartTime)[0]
         # a list of all the pixels [y, x]
         # note that the order that these are created in is very important
         # since the innter loop in updateDisplay assumes this ordering 
@@ -201,12 +204,13 @@ class SkyMap:
         # i.e. project candidateSkyPix onto the plane tangent to the unit
         # sphere at the altaz of (visit.ra, visit.dec)
 
-        radec = np.array([[visit.ra, visit.dec]])
-        visitAltaz = AstronomicalSky.radec2altaz(radec, time)
-        candidateAltaz = AstronomicalSky.radec2altaz(candidateSkyPix, time)
+        visitAlt, visitAz = AstronomicalSky.radec2altaz(visit.ra, visit.dec, time)
+        candidateAlt, candidateAz = \
+                AstronomicalSky.radec2altaz(candidateSkyPix[:,0],
+                                            candidateSkyPix[:,1], time)
 
-        x, y = palpy.ds2tpVector(candidateAltaz[:,1], candidateAltaz[:,0],
-                                 visitAltaz[0][1], visitAltaz[0][0])
+        x, y = palpy.ds2tpVector(candidateAz, candidateAlt,
+                                 visitAz, visitAlt)
         x *= -1
 
         # TODO rotate depending on the angle of the focal plane wrt the sky

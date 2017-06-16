@@ -54,12 +54,12 @@ class Telescope:
         self.settleTime = 3
         self.filterChangeTime = 120
 
-    def calcSlewTime(self, altaz1, filter1, altaz2, filter2):
+    def calcSlewTime(self, alt1, az1, filter1, alt2, az2, filter2):
         # FYI this takes on the order of 10us for 1 slew calculation
 
         # TODO also assumes we never max out the cable wrap-around constraint
-        deltaAlt = np.abs(altaz2[0] - altaz1[0])
-        deltaAz  = np.abs(altaz2[1] - altaz1[1])
+        deltaAlt = np.abs(alt2 - alt1)
+        deltaAz  = np.abs(az2 - az1)
 
         deltaAz = min(deltaAz, np.abs(deltaAz - 2*np.pi))
 

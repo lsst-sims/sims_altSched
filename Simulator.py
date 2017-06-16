@@ -208,19 +208,18 @@ class Simulator:
             if visit is None:
                 self.curTime += 30
             else:
-                radec = np.array([[visit.ra, visit.dec]])
-                altaz = AstronomicalSky.radec2altaz(radec, self.time())[0]
+                alt, az = AstronomicalSky.radec2altaz(visit.ra, visit.dec, self.time())
                 # make sure this az is a valid place to look
-                if altaz[0] < 0:
+                if alt < 0:
                     raise RuntimeError("Can't look at the ground!")
-                if altaz[0] > self.tel.maxAlt:
-                    print "Warning: tried to observe in zenith avoid zone"
+                if alt > self.tel.maxAlt:
+                    #print "Warning: tried to observe in zenith avoid zone"
                     continue
 
                 # figure out how far we have to slew
                 if i > 0:
-                    slewTime = self.tel.calcSlewTime(prevAltaz, prevFilter,
-                                                     altaz, visit.filter)
+                    slewTime = self.tel.calcSlewTime(prevAlt, prevAz, prevFilter,
+                                                     alt, az, visit.filter)
 
                 # notify the skyMap of the visit
                 if trackMap:
@@ -246,7 +245,8 @@ class Simulator:
                 if visit1.isComplete and visit2.isComplete:
                     self.revisitTimes.append(np.abs(visit1.timeOfCompletion - \
                                                     visit2.timeOfCompletion))
-                prevAltaz = altaz
+                prevAlt = alt
+                prevAz = az
                 prevFilter = visit.filter
 
 

@@ -1,11 +1,12 @@
 from __future__ import division
 
-import time
 
 import numpy as np
 import ephem
 from datetime import datetime
 from datetime import timedelta
+import numbers
+import time
 
 import Config
 from Telescope import Telescope
@@ -66,9 +67,8 @@ def raOfMeridian(time):
     yearContribution = (time % oneYear) * 2*np.pi / oneYear
     return (dayContribution + yearContribution) % (2*np.pi)
     """
-    altaz = np.array([[np.pi/2, 0]])
-    radec = altaz2radec(altaz, time)
-    return radec[0,0]
+    ra, dec = altaz2radec(np.pi/2, 0., time)
+    return ra
 
 def radecOfMoon(time):
     moon = ephem.Moon(Utils.mjd2djd(Utils.unix2mjd(time)))
@@ -88,21 +88,39 @@ def unix2lst(longitude, time):
     lst %= 2*np.pi
     return lst
 
-def radec2altaz(radec, time):
+def _checkCoordInput(coord1, coord2):
+    # helper for use in radec2altaz and altaz2radec
+    # inputs (either ra/dec or alt/az)
+    # must be ndarrays of equal size or both floats
+    if isinstance(coord1, np.ndarray):
+        isNumpy = True
+        assert(isinstance(coord2, np.ndarray))
+        assert(coord1.shape == coord2.shape)
+    else:
+        isNumpy = False
+        assert(isinstance(coord1, numbers.Number))
+        assert(isinstance(coord2, numbers.Number))
+    return isNumpy
+
+
+def radec2altaz(ra, dec, time):
+    # inputs must be ndarrays of equal size or both floats
+    isNumpy = _checkCoordInput(ra, dec)
+
     # code adapted from lsst-ts/ts_astrosky_model and lsst-ts/ts_dateloc
-    ra = radec[:,0]
-    dec = radec[:,1]
     lst = unix2lst(Telescope.longitude, time)
-    ha = lst * np.ones(ra.shape) - ra
-    az, alt = palpy.de2hVector(ha, dec, Telescope.latitude)
-    return np.vstack([alt, az]).T
+    ha = lst - ra
+    if isNumpy:
+        az, alt = palpy.de2hVector(ha.flatten(), dec.flatten(), Telescope.latitude)
+        alt = alt.reshape(ra.shape)
+        az = az.reshape(ra.shape)
+    else:
+        az, alt = palpy.de2h(ha, dec, Telescope.latitude)
+    return alt, az
 
-def altaz2radec(altaz, time):
-    alt = altaz[:,0]
-    az = altaz[:,1]
-
+def altaz2radec(alt, az, time):
     """
-    #Same problem as radec2altaz...
+    #Same problem as radec2altaz (i.e. this method takes forever)...
     t = datetime.utcfromtimestamp(time)
     altaz = AltAz(location = Telescope.location, obstime = t, alt = alt * u.rad, az = az * u.rad)
     radec = altaz.transform_to(ICRS)
@@ -111,6 +129,8 @@ def altaz2radec(altaz, time):
 
     # formulas from http://star-www.st-and.ac.uk/~fv/webnotes/chapter7.htm
     # TODO do this with palpy
+
+    isNumpy = _checkCoordInput(alt, az)
     
     lst = unix2lst(Telescope.longitude, time)
 
@@ -122,8 +142,12 @@ def altaz2radec(altaz, time):
     sinHourAngle = -1 * sin(az) * cos(alt) / cos(dec)
     cosHourAngle = (sin(alt) - sin(dec) * sin(lat)) / (cos(dec) * cos(lat))
     hourAngle = np.arcsin(sinHourAngle)
-    hourAngle[cosHourAngle <= 0] = np.pi - hourAngle[cosHourAngle < 0]
+    if isNumpy:
+        hourAngle[cosHourAngle <= 0] = np.pi - hourAngle[cosHourAngle <= 0]
+    else:
+        if cosHourAngle <= 0:
+            hourAngle = np.pi - hourAngle
     ra = lst - hourAngle
 
     #print "diff", np.degrees(astropyResults) - np.degrees(np.vstack([ra, dec]).T)
-    return np.vstack([ra, dec]).T
+    return (ra, dec)
