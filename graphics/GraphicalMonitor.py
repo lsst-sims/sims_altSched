@@ -121,7 +121,7 @@ class GraphicalMonitor:
         imdata[self.zenithAvoidContour[:,0], self.zenithAvoidContour[:,1]] = 0
 
         # draw contours of constant azimuth
-        imdata[self.azContour[:,0], self.azContour[:,1]] = 0
+        #imdata[self.azContour[:,0], self.azContour[:,1]] = 0
 
         # draw the contour at 2 airmasses
         imdata[self.airmassContour[:,0], self.airmassContour[:,1]] = 0
