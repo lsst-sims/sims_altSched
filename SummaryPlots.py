@@ -1,9 +1,9 @@
 from __future__ import division
 
 from matplotlib import pyplot as plt
-from Telescope import Telescope
+from lsst.sims.speedObservatory import Telescope
 import numpy as np
-import AstronomicalSky as AS
+from lsst.sims.speedObservatory import sky
 import time
 import itertools
 
@@ -45,7 +45,7 @@ class SummaryPlots:
         self.filters = allVisitInfos[:,3].astype("S1")
 
         log.debug("sliced allVisitInfos")
-        vectorized = np.vectorize(AS.radec2altaz)
+        vectorized = np.vectorize(sky.radec2altaz)
         self.alts, self.azes = vectorized(self.ras, self.decs, times)
         self.azes[self.azes == 2*np.pi] = 0
 

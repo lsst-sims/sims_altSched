@@ -3,8 +3,8 @@ from __future__ import division
 from astropy import wcs
 import numpy as np
 
-import AstronomicalSky
-from Telescope import Telescope
+from lsst.sims.speedObservatory import sky
+from lsst.sims.speedObservatory import Telescope
 import Utils
 import Config
 import itertools
@@ -53,7 +53,7 @@ class SkyMap:
         """
         alt = altaz[:,0]
         az = altaz[:,1]
-        ra, dec = AstronomicalSky.altaz2radec(alt, az, Config.surveyStartTime)
+        ra, dec = sky.altaz2radec(alt, az, Config.surveyStartTime)
         ra -= self.ra0
         return self.radec2imdata(np.vstack([ra, dec]).T)
 
@@ -110,8 +110,8 @@ class SkyMap:
 
         # calculate ra_0: the ra of the zenith at Config.surveyStartTime
         # this is used to make the zenith centered in the displayed image
-        self.ra0 = AstronomicalSky.altaz2radec(np.pi/2, 0.,
-                                               Config.surveyStartTime)[0]
+        self.ra0 = sky.altaz2radec(np.pi/2, 0.,
+                                   Config.surveyStartTime)[0]
         # a list of all the pixels [y, x]
         # note that the order that these are created in is very important
         # since the innter loop in updateDisplay assumes this ordering 
@@ -204,10 +204,9 @@ class SkyMap:
         # i.e. project candidateSkyPix onto the plane tangent to the unit
         # sphere at the altaz of (visit.ra, visit.dec)
 
-        visitAlt, visitAz = AstronomicalSky.radec2altaz(visit.ra, visit.dec, time)
+        visitAlt, visitAz = sky.radec2altaz(visit.ra, visit.dec, time)
         candidateAlt, candidateAz = \
-                AstronomicalSky.radec2altaz(candidateSkyPix[:,0],
-                                            candidateSkyPix[:,1], time)
+                sky.radec2altaz(candidateSkyPix[:,0], candidateSkyPix[:,1], time)
 
         x, y = palpy.ds2tpVector(candidateAz, candidateAlt,
                                  visitAz, visitAlt)

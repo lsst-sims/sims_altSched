@@ -2,8 +2,8 @@ from __future__ import division
 import numpy as np
 import Config
 from OngoingSurvey import OngoingSurvey
-import AstronomicalSky
-from Telescope import Telescope
+from lsst.sims.speedObservatory import sky
+from lsst.sims.speedObservatory import Telescope
 from MiniSurvey import MiniSurvey
 from Visit import Visit
 from Visit import VisitPair
@@ -116,7 +116,7 @@ class Scheduler:
 
         # return each visit prescribed by scheduleNight()
         for visit in self._scheduleNight(nightNum, nightDirection):
-            alt, az = AstronomicalSky.radec2altaz(visit.ra, visit.dec, self.context.time())
+            alt, az = sky.radec2altaz(visit.ra, visit.dec, self.context.time())
             if prevAlt is not None:
                 slewTime = self.telescope.calcSlewTime(prevAlt, prevAz, prevFilter,
                                                        alt, az, visit.filter)
@@ -127,7 +127,8 @@ class Scheduler:
             yield visit
         # if the night isn't over and we've exhausted the visits in
         # self._scheduleNight, return None until the next night starts
-        while AstronomicalSky.nightNum(self.context.time()) == nightNum:
+        while sky.nightNum(Config.surveyStartTime,
+                           self.context.time()) == nightNum:
             yield None
         if len(self.curNightSlewTimes) > 0:
             if nightDirection == NORTH:
@@ -137,7 +138,7 @@ class Scheduler:
 
     def _scheduleNight(self, nightNum, nightDirection):
         # figure out how many visits we'll probably do tonight
-        nightLength = AstronomicalSky.nightLength(nightNum)
+        nightLength = sky.nightLength(Config.surveyStartTime, nightNum)
         if nightDirection == NORTH:
             t = self.NEstAvgSlewTime + self.estAvgExpTime
         elif nightDirection == SOUTHEAST:
@@ -248,8 +249,8 @@ class Scheduler:
 
             # do as many southern pairs as we can before we have to
             # catch the E fields before they hit the zenith avoidance zone
-            raOfZenith, _ = AstronomicalSky.altaz2radec(np.pi/2, 0,
-                                                        self.context.time())
+            raOfZenith, _ = sky.altaz2radec(np.pi/2, 0,
+                                            self.context.time())
             cutoffRa = raOfZenith + Config.zenithBuffer
             timesLeft = (EMinGroupRa - cutoffRa) * (3600*24) / (2*np.pi)
 
@@ -348,10 +349,10 @@ class Scheduler:
             
             # yield an actual visit, not a visitPair, to the telescope
             (ra, dec) = (visitPair.ra, visitPair.dec)
-            expTime = AstronomicalSky.getExpTime(ra, dec, "otherstuff")
+            expTime = sky.getExpTime(ra, dec, "otherstuff")
 
             # make sure the night won't end before this exposure completes
-            nightEnd = AstronomicalSky.nightEnd(nightNum)
+            nightEnd = sky.nightEnd(Config.surveyStartTime, nightNum)
             if self.context.time() + expTime > nightEnd:
                 return
 
@@ -396,11 +397,11 @@ class Scheduler:
         curTime = self.context.time()
 
     def _getNightRaRange(self, nightNum):
-        nightStart = AstronomicalSky.nightStart(nightNum)
-        nightEnd = AstronomicalSky.nightEnd(nightNum)
+        nightStart = sky.nightStart(Config.surveyStartTime, nightNum)
+        nightEnd = sky.nightEnd(Config.surveyStartTime, nightNum)
 
-        raStart = AstronomicalSky.raOfMeridian(nightStart)
-        raEnd = AstronomicalSky.raOfMeridian(nightEnd)
+        raStart = sky.raOfMeridian(nightStart)
+        raEnd = sky.raOfMeridian(nightEnd)
 
         return (raStart, raEnd)
 

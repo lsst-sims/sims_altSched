@@ -2,15 +2,15 @@ from __future__ import division
 
 import numpy as np
 import time
-from Telescope import Telescope
+from lsst.sims.speedObservatory import Telescope
 
 surveyNumNights = 365 * 10
 # this is january 1 2022 at midnight
 surveyStartTime = 1640995200
 
-# 6.2 degrees is where the area in the south and east
-# equals the area in the north
-maxDec = np.radians(6.2)
+# 6.2 degrees should be where the area in the south and east
+# equals the area in the north but apparently not?
+maxDec = np.radians(11)
 minDec = np.radians(-90)
 
 # Approximate width in RA of easterly scans

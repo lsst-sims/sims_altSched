@@ -6,8 +6,8 @@ from graphics.GraphicalMonitor import GraphicalMonitor
 import numpy as np
 from minis.Scheduler import Scheduler
 import Config
-import AstronomicalSky
-from Telescope import Telescope
+from lsst.sims.speedObservatory import sky
+from lsst.sims.speedObservatory import Telescope
 from SkyMap import SkyMap
 import time
 import sys
@@ -19,20 +19,17 @@ from SummaryPlots import SummaryPlots
 trackMap = True
 showDisp = True and trackMap
 saveMovie = False
-showSummaryPlots = True
+showSummaryPlots = True and trackMap
 clearDisplayNightly = True
 writeCsv = False
 
 assert(not (showDisp and not trackMap))
 
-# TODO plot azimuth vs time
-# change filters every revisit set (revisits 1 hour, change every 2 hours)
-# add in settle time
 surveyYears = 10
 
 class Simulator:
     def __init__(self):
-        self.curTime = AstronomicalSky.nightStart(1)
+        self.curTime = sky.nightStart(Config.surveyStartTime, 1)
 
     @staticmethod
     def getUpdateRate(nightNum, i):
@@ -189,8 +186,8 @@ class Simulator:
         plotter.show()
 
     def simulateNight(self, nightNum):
-        nightStart = AstronomicalSky.nightStart(nightNum)
-        nightEnd   = AstronomicalSky.nightEnd(nightNum)
+        nightStart = sky.nightStart(Config.surveyStartTime, nightNum)
+        nightEnd   = sky.nightEnd(Config.surveyStartTime, nightNum)
 
         # start out the simulation at the beginning of the night
         self.curTime = nightStart
@@ -208,7 +205,7 @@ class Simulator:
             if visit is None:
                 self.curTime += 30
             else:
-                alt, az = AstronomicalSky.radec2altaz(visit.ra, visit.dec, self.time())
+                alt, az = sky.radec2altaz(visit.ra, visit.dec, self.time())
                 # make sure this az is a valid place to look
                 if alt < 0:
                     raise RuntimeError("Can't look at the ground!")
@@ -226,7 +223,7 @@ class Simulator:
                     self.skyMap.addVisit(visit, self.curTime)
 
                 # add the exposure time of this visit to the current time
-                expTime = AstronomicalSky.getExpTime(visit.ra, visit.dec)
+                expTime = sky.getExpTime(visit.ra, visit.dec)
                 self.curTime += expTime
                 if i > 0:
                     self.curTime += slewTime

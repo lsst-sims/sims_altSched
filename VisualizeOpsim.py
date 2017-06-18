@@ -6,11 +6,11 @@ from graphics.GraphicalMonitor import GraphicalMonitor
 import astropy.time
 from Visit import Visit
 from Simulator import Simulator
-import AstronomicalSky
+from lsst.sims.speedObservatory import sky
 from SummaryPlots import SummaryPlots
 from SkyMap import SkyMap
 
-from Telescope import Telescope
+from lsst.sims.speedObservatory import Telescope
 
 import time
 from matplotlib import pyplot as plt
@@ -55,7 +55,7 @@ class VisualizeOpsim:
             self.curTime = t.unix
 
             radec = np.array([[ra, dec]])
-            altaz = AstronomicalSky.radec2altaz(radec, self.curTime)
+            altaz = sky.radec2altaz(radec, self.curTime)
             alts.append(altaz[0,0])
             azes.append(altaz[0,1])
             obsDecs.append(dec)

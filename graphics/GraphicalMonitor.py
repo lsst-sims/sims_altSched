@@ -2,8 +2,8 @@ from __future__ import division
 
 import numpy as np
 
-from Telescope import Telescope
-import AstronomicalSky
+from lsst.sims.speedObservatory import Telescope
+from lsst.sims.speedObservatory import sky
 import Config
 from SkyMap import SkyMap
 
@@ -94,8 +94,8 @@ class GraphicalMonitor:
         # skyAngle is how far to rotate the sky to the right, so we
         # need it to be -\Delta meridian since the ra of the meridian
         # increases with time (RA is higher in the East)
-        skyAngle = (AstronomicalSky.raOfMeridian(startTime) -
-                    AstronomicalSky.raOfMeridian(curTime))
+        skyAngle = (sky.raOfMeridian(startTime) -
+                    sky.raOfMeridian(curTime))
         skyAngle = (skyAngle - skyMap.ra0) % (2*np.pi)
 
         if self.mode == "nvisits":

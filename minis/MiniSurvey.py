@@ -1,6 +1,6 @@
 from  __future__ import division
 import numpy as  np
-from Telescope import Telescope
+from lsst.sims.speedObservatory import Telescope
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from RotationGenerator import RotationGenerator

@@ -18,24 +18,6 @@ def isRaInRange(ra, (minRa, maxRa)):
     else:
         return minRa < ra or  ra < maxRa
 
-def unix2mjd(timestamp):
-    return timestamp / 86400 + 40587
-
-def mjd2unix(mjd):
-    return (mjd - 40587) * 86400
-
-def mjd2djd(mjd):
-    """
-    Convert Modified Julian Date to Dublin Julian Date (what pyephem uses).
-    (this function adapted from Peter Yoachim's code)
-    """
-    doff = 15019.5 # this equals ephem.Date(0)-ephem.Date('1858/11/17')
-    return mjd - doff
-
-def timetsamp(mjd):
-    t = Time(mjd, format="mjd")
-    return t.unix
-
 # I could use one of astropy's implementation of this
 # but one of them is 10x slower than this and the 
 # other requires using Longitude or Angle classes or
