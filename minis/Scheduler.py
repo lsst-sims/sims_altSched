@@ -105,9 +105,9 @@ class Scheduler:
         #print "ECoverage", ECoverage
         #print "SECoverage", SECoverage
         if NCoverage < SECoverage:
-            nightDirection = NORTH
+            self.nightDirection = NORTH
         else:
-            nightDirection = SOUTHEAST
+            self.nightDirection = SOUTHEAST
 
         # reset the slew times array
         self.curNightSlewTimes = []
@@ -115,7 +115,7 @@ class Scheduler:
         prevFilter = self.telescope.filters[0]
 
         # return each visit prescribed by scheduleNight()
-        for visit in self._scheduleNight(nightNum, nightDirection):
+        for visit in self._scheduleNight(nightNum):
             alt, az = sky.radec2altaz(visit.ra, visit.dec, self.context.time())
             if prevAlt is not None:
                 slewTime = self.telescope.calcSlewTime(prevAlt, prevAz, prevFilter,
@@ -125,23 +125,13 @@ class Scheduler:
             prevAz = az
             prevFilter = visit.filter
             yield visit
-        # if the night isn't over and we've exhausted the visits in
-        # self._scheduleNight, return None until the next night starts
-        while sky.nightNum(Config.surveyStartTime,
-                           self.context.time()) == nightNum:
-            yield None
-        if len(self.curNightSlewTimes) > 0:
-            if nightDirection == NORTH:
-                self.NEstAvgSlewTime = np.mean(self.curNightSlewTimes)
-            elif nightDirection == SOUTHEAST:
-                self.SEEstAvgSlewTime = np.mean(self.curNightSlewTimes)
 
-    def _scheduleNight(self, nightNum, nightDirection):
+    def _scheduleNight(self, nightNum):
         # figure out how many visits we'll probably do tonight
         nightLength = sky.nightLength(Config.surveyStartTime, nightNum)
-        if nightDirection == NORTH:
+        if self.nightDirection == NORTH:
             t = self.NEstAvgSlewTime + self.estAvgExpTime
-        elif nightDirection == SOUTHEAST:
+        elif self.nightDirection == SOUTHEAST:
             t = self.SEEstAvgSlewTime + self.estAvgExpTime
         expectedNumVisits = int(nightLength / t)
         # TODO it might be greater than numVisits / 2 if we expect to
@@ -192,7 +182,7 @@ class Scheduler:
 
         """
    
-        if nightDirection == NORTH:
+        if self.nightDirection == NORTH:
             pendingVPs = topUpVPs(NORTH)
             # choose which visitPairs we're going to execute tonight
             # TODO could prioritize doing stale visitPairs
@@ -215,7 +205,7 @@ class Scheduler:
 
             filterIds = self._getFilterIds(NORTH, len(scans))
 
-        elif nightDirection == SOUTHEAST:
+        elif self.nightDirection == SOUTHEAST:
             SPendingVPs = topUpVPs(SOUTH)
             EPendingVPs = topUpVPs(EAST)
             areaInSouthEast = self.areaInSouth + self.areaInEast
@@ -391,6 +381,15 @@ class Scheduler:
             else:
                 raise RuntimeError("Completed visit " + str(visit) + \
                                    " is in unknown direction")
+
+    def notifyNightEnd(self):
+        if len(self.curNightSlewTimes) == 0:
+            return
+        if self.nightDirection == NORTH:
+            self.NEstAvgSlewTime = np.mean(self.curNightSlewTimes)
+        elif self.nightDirection == SOUTHEAST:
+            self.SEEstAvgSlewTime = np.mean(self.curNightSlewTimes)
+
 
     def _scheduleRestOfNight(self):
         # TODO questionable function but might need in case of clouds?

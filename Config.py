@@ -22,3 +22,6 @@ EScanWidth = np.radians(30)
 tel = Telescope()
 zenithBuffer = 2 * tel.fovWidth
 zenithBufferOffset = 4 * tel.fovWidth
+
+# don't observe when the cloud is more than maxCloudCover cloudy
+maxCloudCover = 0.7

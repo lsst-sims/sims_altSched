@@ -12,9 +12,13 @@ from SkyMap import SkyMap
 import time
 import sys
 from multiprocessing import Pool
+from datetime import datetime
 
 from matplotlib import pyplot as plt
 from SummaryPlots import SummaryPlots
+
+from lsst.sims.ocs.kernel.time_handler import TimeHandler
+from lsst.sims.ocs.environment.cloud_model import CloudModel
 
 trackMap = True
 showDisp = True and trackMap
@@ -85,8 +89,19 @@ class Simulator:
     def run(self, tel):
         self.tel = tel
 
+        # read in downtime nights TODO use SOCS/speedObservatory for this
         downtimeNights = self.parseDowntime()
+
+        # initialize the scheduler
         self.sched = Scheduler(telescope=self.tel, context=self)
+
+        # make a TimeHandler to give to the CloudModel
+        dateFormat = "%Y-%m-%d"
+        startDatetime = datetime.utcfromtimestamp(Config.surveyStartTime)
+        timeHandler = TimeHandler(datetime.strftime(startDatetime, dateFormat))
+        self.cloudModel = CloudModel(timeHandler)
+        # load the cloud database
+        self.cloudModel.initialize()
 
         # resScale is proportional to the resolution (and therefore the speed)
         if trackMap:
@@ -102,6 +117,7 @@ class Simulator:
             outFile = open("results/downtime_nightlen.csv", "w")
             outFile.write("time (unix), ra (rads), dec (rads), filter\n")
 
+        # run the survey!
         numSimulatedNights = int(surveyYears * 365.25)
         for nightNum in range(numSimulatedNights):
             print "Night:", nightNum, "\r",
@@ -208,7 +224,8 @@ class Simulator:
                 alt, az = sky.radec2altaz(visit.ra, visit.dec, self.time())
                 # make sure this az is a valid place to look
                 if alt < 0:
-                    raise RuntimeError("Can't look at the ground!")
+                    raise RuntimeError("Can't look at the ground! " +
+                                       "visit=" + visit)
                 if alt > self.tel.maxAlt:
                     #print "Warning: tried to observe in zenith avoid zone"
                     continue
@@ -257,9 +274,18 @@ class Simulator:
                 if saveMovie:
                     self.display.saveFrame("images/pygame/%07d.png" % i)
 
+            # skip forward in time if there are clouds
+            deltaT = self.curTime - Config.surveyStartTime
+            cloudCover = self.cloudModel.get_cloud(deltaT)
+            while cloudCover > Config.maxCloudCover and self.curTime <= nightEnd:
+                self.curTime += 600
+                self.display.updateDisplay(self.skyMap, self.curTime)
+                deltaT = self.curTime - Config.surveyStartTime
+                cloudCover = self.cloudModel.get_cloud(deltaT)
             # process the end of the night if necessary
             if self.curTime > nightEnd:
-                return
+                break
+        self.sched.notifyNightEnd()
 
     def time(self):
         return self.curTime
