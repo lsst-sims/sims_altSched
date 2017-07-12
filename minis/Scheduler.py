@@ -93,7 +93,10 @@ class Scheduler:
                 moonPhase > Config.moonUMaxPhase):
 
                 # replace u observations when the moon is up with r observations
-                filterIds.append(Telescope.filterId['r'])
+                if self.leftOutFilterIds[direction] == Telescope.filterId['r']:
+                    filterIds.append(Telescope.filterId['i'])
+                else:
+                    filterIds.append(Telescope.filterId['r'])
             else:
                 filterIds.append(filterId)
 
