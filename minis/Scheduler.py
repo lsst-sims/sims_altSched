@@ -256,19 +256,36 @@ class Scheduler:
             #print "S scans", len([v for s in SScans for v in s]) / self.areaInSouth
             #print "E scans", len([v for s in EScans for v in s]) / self.areaInEast
 
-            EScansRas = [[v.ra for v in scan] for scan in EScans]
-            EMinRas = np.array([min(ras) for ras in EScansRas])
-            numECols = int(len(EScans) / 2)
-            # EMinGroupRa is an array of numECols numbers: the min RA from
-            # scans 1/2, from scans 3/4, 5/6, etc.
-            EMinGroupRa = EMinRas.reshape(numECols,2).T.min(axis=0)
-
             # do as many southern pairs as we can before we have to
             # catch the E fields before they hit the zenith avoidance zone
             raOfZenith, _ = sky.altaz2radec(np.pi/2, 0,
                                             self.context.time())
             cutoffRa = raOfZenith + Config.zenithBuffer
-            timesLeft = (EMinGroupRa - cutoffRa) * (3600*24) / (2*np.pi)
+
+            EScansRas = [np.array([v.ra for v in scan]) for scan in EScans]
+            EMinRas = np.zeros(len(EScansRas))
+            for i, ras in enumerate(EScansRas):
+                if len(ras) == 0:
+                    print "nightNum", nightNum
+                    print "nightLen", sky.nightLength(Config.surveyStartTime, nightNum) / 3600
+                    print "EScans len", [len(scan) for scan in EScans]
+                    print "SScans len", [len(scan) for scan in SScans]
+                    print "avgVisitTime", self.estAvgExpTime + self.SEEstAvgSlewTime
+                    #raise RuntimeError("ras len 0, i=%d" % i)
+                    EMinRas[i] = cutoffRa
+                    continue
+                if ras.max() - ras.min() > np.pi:
+                    minRa = ((ras + np.pi) % (2*np.pi)).min() - np.pi
+                else:
+                    minRa = ras.min()
+                EMinRas[i] = minRa
+                #EMinRas = np.array([min(ras) for ras in EScansRas])
+            numECols = int(len(EScans) / 2)
+            # EMinGroupRa is an array of numECols numbers: the min RA from
+            # scans 1/2, from scans 3/4, 5/6, etc.
+            EMinGroupRa = EMinRas.reshape(numECols,2).T.min(axis=0)
+
+            timesLeft = ((EMinGroupRa - cutoffRa) % (2*np.pi)) * (3600*24) / (2*np.pi)
 
             avgVisitTime = self.estAvgExpTime + self.SEEstAvgSlewTime
             EScanTimes = np.array(map(len, EScans)) * avgVisitTime
@@ -281,6 +298,22 @@ class Scheduler:
             # twice, since at that point we're headed back East again so are no
             # longer worried about hitting the zenith avoid zone
             execTimes = 2 * EScanTimes[::2] + EScanTimes[1::2]
+
+            def printDebug():
+                print "nightNum", nightNum
+                print "numECols", numECols
+                print "EMinGroupRa", EMinGroupRa
+                print "raOfZenith", raOfZenith
+                print "cutoffRa", cutoffRa
+                print "timesLeft", timesLeft, timesLeft / 3600
+                print "avgVisitTime", avgVisitTime
+                print "EScanTimes", EScanTimes, EScanTimes / 3600, np.cumsum(EScanTimes/3600)
+                print "execTimes", execTimes
+                SScanTimes = np.array(map(len, SScans)) * avgVisitTime
+                print "SScanTimes", SScanTimes, SScanTimes / 3600, np.cumsum(SScanTimes/3600)
+
+            if nightNum > 320e10:
+                printDebug()
 
             # now combine the South and East scans together in a good order
             # into the scans, filterIds, and scanDirs arrays
@@ -313,12 +346,22 @@ class Scheduler:
                 # now add the South scan. Note this assumes that we never need
                 # to add two East scans in a row in order to keep out of the
                 # zenith avoidance region, which seems like a reasonable assumption
+                # TODO but might be false in the case of extreme weather causing
+                # a buildup in one southern scan
                 scans += [SScans[i], SScans[i+1], SScans[i], SScans[i+1]]
                 scanDirs += [SOUTH, NORTH, SOUTH, NORTH]
                 for _ in range(4):
                     filterIds.append(SFilterIds.pop(0))
-            # we should have added all the East scans by now
-            if j != numECols:
+            # we should have added all the East scans by now excepting perhaps one
+            if j < numECols:
+                # TODO duplicate code from above
+                scans += [EScans[2*j], EScans[2*j+1], EScans[2*j], EScans[2*j+1]]
+                scanDirs += [WEST, EAST, WEST, EAST]
+                for _ in range(4):
+                    filterIds.append(EFilterIds.pop(0))
+                j += 1
+            if j < numECols - 1:
+                printDebug()
                 raise RuntimeWarning("j=" + str(j) + "!")
 
         for scan, scanDir, filterId in zip(scans, scanDirs, filterIds):
