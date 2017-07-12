@@ -133,7 +133,14 @@ class Scheduler:
         prevFilter = self.telescope.filters[0]
 
         # return each visit prescribed by scheduleNight()
+        prevTime = None
         for visit in self._scheduleNight(nightNum):
+            time = self.context.time()
+            if prevTime is not None and time - prevTime > 15 * 60:
+                # TODO this is a quick fix
+                # the dome closed due to weather and then reopened
+                # for now just stay shuttered the rest of the night
+                return
             alt, az = sky.radec2altaz(visit.ra, visit.dec, self.context.time())
             if prevAlt is not None:
                 slewTime = self.telescope.calcSlewTime(prevAlt, prevAz, prevFilter,
@@ -142,6 +149,7 @@ class Scheduler:
             prevAlt = alt
             prevAz = az
             prevFilter = visit.filter
+            prevTime = time
             yield visit
 
     def _scheduleNight(self, nightNum):
