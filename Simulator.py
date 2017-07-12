@@ -114,8 +114,8 @@ class Simulator:
 
         # write the header to the output file if writeCsv flag is set
         if writeCsv:
-            outFile = open("results/downtime_nightlen.csv", "w")
-            outFile.write("time (unix), ra (rads), dec (rads), filter\n")
+            self.outFile = open("results/discard_me.csv", "w")
+            self.outFile.write("time (unix), ra (rads), dec (rads), filter\n")
 
         # run the survey!
         numSimulatedNights = int(surveyYears * 365.25)
@@ -132,7 +132,7 @@ class Simulator:
                 self.skyMap.clear()
 
         if writeCsv:
-            outFile.close()
+            self.outFile.close()
 
         # we're done with the simulation now unless we have to show
         # the summary plots
@@ -246,10 +246,10 @@ class Simulator:
                     self.curTime += slewTime
                     self.slewTimes.append(slewTime)
                 if writeCsv:
-                    outFile.write(str(self.time()) + "," + \
-                                  str(visit.ra) + "," + \
-                                  str(visit.dec) + "," + \
-                                  visit.filter + "\n")
+                    self.outFile.write(str(self.time()) + "," + \
+                                       str(visit.ra) + "," + \
+                                       str(visit.dec) + "," + \
+                                       visit.filter + "\n")
                 # let the scheduler know we "carried out" this visit
                 self.sched.notifyVisitComplete(visit, self.time())
 
