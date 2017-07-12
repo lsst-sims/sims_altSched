@@ -62,7 +62,7 @@ class Scheduler:
         self.startFilterIds = {NORTH: 0, SOUTH: 0, EAST: 0}
         self.leftOutFilterIds = {NORTH: 0, SOUTH: 0, EAST: 0}
 
-    def _getFilterIds(self, direction, nScans):
+    def _getFilterIds(self, nightNum, direction, nScans):
         # note: this method modifies instance state
         # (start filters and left out filters)
 
@@ -70,22 +70,40 @@ class Scheduler:
         def inc(filterId):
             return (filterId + 1) % len(Telescope.filters)
 
-        # decide which filters to use for the night
+        # decide which filter to leave out of the filter wheel for the night
         leftOut = self.leftOutFilterIds[direction]
-        nightsFilterIds = range(0, leftOut) + \
-                          range(leftOut + 1, len(Telescope.filters))
         self.leftOutFilterIds[direction] = inc(self.leftOutFilterIds[direction])
 
+        nightsFilterIds = range(0, leftOut) + \
+                          range(leftOut + 1, len(Telescope.filters))
+
+        # build a list `filterId` of filters to use for each of `nScans` scans
+        timePerScan = sky.nightLength(Config.surveyStartTime, nightNum) / nScans
+        time = sky.nightStart(Config.surveyStartTime, nightNum)
         filterId = self.startFilterIds[direction]
         filterIds = []
         for i in range(nScans):
             if filterId not in nightsFilterIds:
                 filterId = inc(filterId)
-            filterIds.append(filterId)
+            moonPhase = sky.phaseOfMoon(time)
+            moonRa, moonDec = sky.radecOfMoon(time)
+            moonAlt, moonAz = sky.radec2altaz(moonRa, moonDec, time)
+            if (filterId == Telescope.filterId['u'] and
+                moonAlt > Config.moonUMaxAlt and
+                moonPhase > Config.moonUMaxPhase):
+
+                # replace u observations when the moon is up with r observations
+                filterIds.append(Telescope.filterId['r'])
+            else:
+                filterIds.append(filterId)
+
             if i % 2 == 0:
                 filterId = inc(filterId)
+            time += timePerScan
 
         # set up startFilterId for next night
+        # it needs to be incremented by 2, with the leftout filter skipped over
+        # if necessary
         for i in range(2):
             if self.startFilterIds[direction] not in nightsFilterIds:
                 self.startFilterIds[direction] = inc(self.startFilterIds[direction])
@@ -203,7 +221,7 @@ class Scheduler:
             scanDirs[0::2] = NORTH
             scanDirs[1::2] = SOUTH
 
-            filterIds = self._getFilterIds(NORTH, len(scans))
+            filterIds = self._getFilterIds(nightNum, NORTH, len(scans))
 
         elif self.nightDirection == SOUTHEAST:
             SPendingVPs = topUpVPs(SOUTH)
@@ -224,8 +242,8 @@ class Scheduler:
             SScans = self._generateScans(nightNum, STonightsVPs, SOUTH)
             EScans = self._generateScans(nightNum, ETonightsVPs, EAST)
 
-            SFilterIds = self._getFilterIds(SOUTH, len(SScans)*2)
-            EFilterIds = self._getFilterIds(EAST,  len(EScans)*2)
+            SFilterIds = self._getFilterIds(nightNum, SOUTH, len(SScans)*2)
+            EFilterIds = self._getFilterIds(nightNum, EAST,  len(EScans)*2)
 
             #print "S scans", len([v for s in SScans for v in s]) / self.areaInSouth
             #print "E scans", len([v for s in EScans for v in s]) / self.areaInEast
