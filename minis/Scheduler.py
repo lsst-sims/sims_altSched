@@ -82,7 +82,9 @@ class Scheduler:
         time = sky.nightStart(Config.surveyStartTime, nightNum)
         filterId = self.startFilterIds[direction]
         filterIds = []
-        for i in range(nScans):
+        # loop through every other scan since we always schedule filters
+        # in pairs of scans
+        for i in range(0, nScans, 2):
             if filterId not in nightsFilterIds:
                 filterId = inc(filterId)
             moonPhase = sky.phaseOfMoon(time)
@@ -102,9 +104,12 @@ class Scheduler:
             else:
                 filterIds.append(filterId)
 
-            if i % 2 == 0:
+            # repeat the same filter for the next scan
+            filterIds.append(filterIds[-1])
+
+            if i % 4 == 0:
                 filterId = inc(filterId)
-            time += timePerScan
+            time += timePerScan * 2
 
         # set up startFilterId for next night
         # it needs to be incremented by 2, with the leftout filter skipped over
