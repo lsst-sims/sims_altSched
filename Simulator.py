@@ -219,15 +219,31 @@ class Simulator:
             # if visit is None, that means the scheduler ran out of places
             # to point for the night
             if visit is None:
+                print "visit is none!"
                 self.curTime += 30
             else:
                 alt, az = sky.radec2altaz(visit.ra, visit.dec, self.time())
                 # make sure this az is a valid place to look
                 if alt < 0:
-                    raise RuntimeError("Can't look at the ground! " +
-                                       "visit=" + visit)
+                    errorMsg = "Can't look at the ground! visit = %s " + \
+                               "on nightNum %d at time %f. alt/az = %f / %f. " + \
+                               "Previous alt/az = %f / %f. NightStart = %f"
+                    args = (visit, nightNum, self.curTime, alt, az,
+                            prevAlt, prevAz, nightStart)
+                    print errorMsg % args
+                    #raise RuntimeError(errorMsg % args)
+                    # don't execute this visit
+                    continue
                 if alt > self.tel.maxAlt:
-                    #print "Warning: tried to observe in zenith avoid zone"
+                    errormsg = "Warning: tried to observe in zenith avoid zone "
+                    errormsg += "(visit, nightNum, curTime, alt, az, prevAlt, "
+                    errormsg += "prevAz, nightStart)="
+                    errormsg += ",".join(map(str, (visit, nightNum, self.curTime,
+                                                   alt, az, prevAlt, prevAz,
+                                                   nightStart)))
+                    print errormsg
+                    #raise RuntimeError(errormsg)
+                    # don't execute this visit
                     continue
 
                 # figure out how far we have to slew
