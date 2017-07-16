@@ -165,13 +165,18 @@ class Scheduler:
     def _scheduleNight(self, nightNum):
         # figure out how many visits we'll probably do tonight
         nightLength = sky.nightLength(Config.surveyStartTime, nightNum)
+        # the period of exposure taking is the sum of the exposure time,
+        # the visit overhead time (shutter/intermediate readout),
+        # and the slew time
         if self.nightDirection == NORTH:
-            t = self.NEstAvgSlewTime + self.estAvgExpTime
+            t = self.NEstAvgSlewTime
         elif self.nightDirection == SOUTHEAST:
-            t = self.SEEstAvgSlewTime + self.estAvgExpTime
+            t = self.SEEstAvgSlewTime
+        t += self.estAvgExpTime + Config.visitOverheadTime
         expectedNumVisits = int(nightLength / t)
         # TODO it might be greater than numVisits / 2 if we expect to
         # lose revisits due to weather. May model this at some point
+        # (VP = Visit Pair)
         expectedNumVPs = int(expectedNumVisits / 2)
 
         # for each direction, figure out if we need to add a new mini
@@ -297,7 +302,8 @@ class Scheduler:
 
             timesLeft = ((EMinGroupRa - cutoffRa) % (2*np.pi)) * (3600*24) / (2*np.pi)
 
-            avgVisitTime = self.estAvgExpTime + self.SEEstAvgSlewTime
+            avgVisitTime = (self.estAvgExpTime + self.SEEstAvgSlewTime +
+                            Config.visitOverheadTime)
             EScanTimes = np.array(map(len, EScans)) * avgVisitTime
 
             # this is the time available between when we start a pair of East

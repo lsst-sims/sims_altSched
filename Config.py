@@ -25,3 +25,7 @@ zenithBufferOffset = 4 * tel.fovWidth
 
 # don't observe when the cloud is more than maxCloudCover cloudy
 maxCloudCover = 0.7
+
+# number of seconds of overhead needed per visit
+# (shutter and potentially intermediate readout times)
+visitOverheadTime = 4

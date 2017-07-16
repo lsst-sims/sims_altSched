@@ -268,6 +268,7 @@ class Simulator:
                 # add the exposure time of this visit to the current time
                 expTime = sky.getExpTime(visit.ra, visit.dec)
                 self.curTime += expTime
+                self.curTime += Config.visitOverheadTime
                 if i > 0:
                     self.curTime += slewTime
                     self.slewTimes.append(slewTime)
