@@ -20,7 +20,9 @@ from SummaryPlots import SummaryPlots
 from lsst.sims.ocs.kernel.time_handler import TimeHandler
 from lsst.sims.ocs.environment.cloud_model import CloudModel
 
-trackMap = True
+from  lsst.sims.speedObservatory.utils import unix2mjd
+
+trackMap = False
 showDisp = True and trackMap
 saveMovie = False
 showSummaryPlots = True and trackMap
@@ -114,8 +116,8 @@ class Simulator:
 
         # write the header to the output file if writeCsv flag is set
         if writeCsv:
-            self.outFile = open("results/discard_me.csv", "w")
-            self.outFile.write("time (unix), ra (rads), dec (rads), filter\n")
+            self.outFile = open("results/fewerFChanges.csv", "w")
+            self.outFile.write("time (mjd), ra (rads), dec (rads), filter\n")
 
         # run the survey!
         numSimulatedNights = int(surveyYears * 365.25)
@@ -270,7 +272,7 @@ class Simulator:
                     self.curTime += slewTime
                     self.slewTimes.append(slewTime)
                 if writeCsv:
-                    self.outFile.write(str(self.time()) + "," + \
+                    self.outFile.write(str(unix2mjd(self.time())) + "," + \
                                        str(visit.ra) + "," + \
                                        str(visit.dec) + "," + \
                                        visit.filter + "\n")
