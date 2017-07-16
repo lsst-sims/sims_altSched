@@ -216,6 +216,14 @@ class Simulator:
         for i, visit in enumerate(self.sched.scheduleNight(nightNum)):
             perNight, deltaI = self.getUpdateRate(nightNum, i)
 
+            # skip forward in time if there are clouds
+            deltaT = self.curTime - Config.surveyStartTime
+            cloudCover = self.cloudModel.get_cloud(deltaT)
+            while cloudCover > Config.maxCloudCover and self.curTime <= nightEnd:
+                self.curTime += 600
+                deltaT = self.curTime - Config.surveyStartTime
+                cloudCover = self.cloudModel.get_cloud(deltaT)
+
             # if visit is None, that means the scheduler ran out of places
             # to point for the night
             if visit is None:
@@ -289,15 +297,6 @@ class Simulator:
                 # save each frame if the saveMovie flag is set
                 if saveMovie:
                     self.display.saveFrame("images/pygame/%07d.png" % i)
-
-            # skip forward in time if there are clouds
-            deltaT = self.curTime - Config.surveyStartTime
-            cloudCover = self.cloudModel.get_cloud(deltaT)
-            while cloudCover > Config.maxCloudCover and self.curTime <= nightEnd:
-                self.curTime += 600
-                self.display.updateDisplay(self.skyMap, self.curTime)
-                deltaT = self.curTime - Config.surveyStartTime
-                cloudCover = self.cloudModel.get_cloud(deltaT)
             # process the end of the night if necessary
             if self.curTime > nightEnd:
                 break
