@@ -215,6 +215,8 @@ class Simulator:
 
         # prevFilter is the filter of the last visit
         prevFilter = ''
+        prevAlt = -1
+        prevAz = -1
         for i, visit in enumerate(self.sched.scheduleNight(nightNum)):
             perNight, deltaI = self.getUpdateRate(nightNum, i)
 
@@ -225,6 +227,7 @@ class Simulator:
                 self.curTime += 600
                 deltaT = self.curTime - Config.surveyStartTime
                 cloudCover = self.cloudModel.get_cloud(deltaT)
+                return # skip the rest of the night
 
             # if visit is None, that means the scheduler ran out of places
             # to point for the night
