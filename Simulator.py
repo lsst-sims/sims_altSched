@@ -35,7 +35,7 @@ surveyYears = 10
 
 class Simulator:
     def __init__(self):
-        self.curTime = sky.nightStart(Config.surveyStartTime, 1)
+        pass
 
     @staticmethod
     def getUpdateRate(nightNum, i):
@@ -204,11 +204,11 @@ class Simulator:
         plotter.show()
 
     def simulateNight(self, nightNum):
-        nightStart = sky.nightStart(Config.surveyStartTime, nightNum)
-        nightEnd   = sky.nightEnd(Config.surveyStartTime, nightNum)
+        twilStart = sky.twilStart(Config.surveyStartTime, nightNum)
+        twilEnd   = sky.twilEnd(Config.surveyStartTime, nightNum)
 
         # start out the simulation at the beginning of the night
-        self.curTime = nightStart
+        self.curTime = twilStart
 
         # prevI is the last value of i when we updated the display
         prevI = 0
@@ -223,7 +223,7 @@ class Simulator:
             # skip forward in time if there are clouds
             deltaT = self.curTime - Config.surveyStartTime
             cloudCover = self.cloudModel.get_cloud(deltaT)
-            while cloudCover > Config.maxCloudCover and self.curTime <= nightEnd:
+            while cloudCover > Config.maxCloudCover and self.curTime <= twilEnd:
                 self.curTime += 600
                 deltaT = self.curTime - Config.surveyStartTime
                 cloudCover = self.cloudModel.get_cloud(deltaT)
@@ -242,7 +242,7 @@ class Simulator:
                                "on nightNum %d at time %f. alt/az = %f / %f. " + \
                                "Previous alt/az = %f / %f. NightStart = %f"
                     args = (visit, nightNum, self.curTime, alt, az,
-                            prevAlt, prevAz, nightStart)
+                            prevAlt, prevAz, twilStart)
                     print errorMsg % args
                     #raise RuntimeError(errorMsg % args)
                     # don't execute this visit
@@ -250,10 +250,10 @@ class Simulator:
                 if alt > self.tel.maxAlt:
                     errormsg = "Warning: tried to observe in zenith avoid zone "
                     errormsg += "(visit, nightNum, curTime, alt, az, prevAlt, "
-                    errormsg += "prevAz, nightStart)="
+                    errormsg += "prevAz, twilStart)="
                     errormsg += ",".join(map(str, (visit, nightNum, self.curTime,
                                                    alt, az, prevAlt, prevAz,
-                                                   nightStart)))
+                                                   twilStart)))
                     print errormsg
                     #raise RuntimeError(errormsg)
                     # don't execute this visit
@@ -304,7 +304,7 @@ class Simulator:
                 if saveMovie:
                     self.display.saveFrame("images/pygame/%07d.png" % i)
             # process the end of the night if necessary
-            if self.curTime > nightEnd:
+            if self.curTime > twilEnd:
                 break
         self.sched.notifyNightEnd()
 

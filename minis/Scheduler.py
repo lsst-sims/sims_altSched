@@ -427,8 +427,8 @@ class Scheduler:
             expTime = sky.getExpTime(ra, dec, "otherstuff")
 
             # make sure the night won't end before this exposure completes
-            nightEnd = sky.nightEnd(Config.surveyStartTime, nightNum)
-            if self.context.time() + expTime > nightEnd:
+            twilEnd = sky.twilEnd(Config.surveyStartTime, nightNum)
+            if self.context.time() + expTime > twilEnd:
                 return
 
             if not visitPair.visit1.isComplete:
@@ -481,11 +481,11 @@ class Scheduler:
         curTime = self.context.time()
 
     def _getNightRaRange(self, nightNum):
-        nightStart = sky.nightStart(Config.surveyStartTime, nightNum)
-        nightEnd = sky.nightEnd(Config.surveyStartTime, nightNum)
+        twilStart = sky.twilStart(Config.surveyStartTime, nightNum)
+        twilEnd = sky.twilEnd(Config.surveyStartTime, nightNum)
 
-        raStart = sky.raOfMeridian(nightStart)
-        raEnd = sky.raOfMeridian(nightEnd)
+        raStart = sky.raOfMeridian(twilStart)
+        raEnd = sky.raOfMeridian(twilEnd)
 
         return (raStart, raEnd)
 
