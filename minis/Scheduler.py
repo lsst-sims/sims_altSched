@@ -32,8 +32,8 @@ class Scheduler:
 
         # these estimates get updated at the end of each night
         # (currently estAvgExpTime is not updated)
-        self.NEstAvgSlewTime = 8 # seconds
-        self.SEEstAvgSlewTime = 8 # seconds
+        self.NEstAvgSlewTime = 10 # seconds
+        self.SEEstAvgSlewTime = 10 # seconds
         self.estAvgExpTime = 30 #seconds
 
         # keep track of how long we spend slewing each night
@@ -77,39 +77,71 @@ class Scheduler:
         nightsFilterIds = range(0, leftOut) + \
                           range(leftOut + 1, len(Telescope.filters))
 
-        # build a list `filterId` of filters to use for each of `nScans` scans
+
+        # keep track of what time we expect it to be for each scan
         timePerScan = sky.nightLength(Config.surveyStartTime, nightNum) / nScans
-        time = sky.nightStart(Config.surveyStartTime, nightNum)
+        time = sky.twilStart(Config.surveyStartTime, nightNum)
+        nightStartTime = sky.nightStart(Config.surveyStartTime, nightNum)
+        nightEndTime   = sky.nightEnd(  Config.surveyStartTime, nightNum)
+
+
+        # build a list `filterId` of filters to use for each of `nScans` scans
         filterId = self.startFilterIds[direction]
         filterIds = []
-        # loop through every other scan since we always schedule filters
-        # in pairs of scans
-        for i in range(0, nScans, 2):
+
+        # helper to choose a filter based on which are available tonight
+        def attemptFId(attemptId, backupId):
+            if attemptId == self.leftOutFilterIds[direction]:
+                return backupId
+            else:
+                return attemptId
+
+        # get the id of a filter such as 'u' or 'r'
+        def fid(filter):
+            return Telescope.filterId[filter]
+
+        # at the beginning and end of each night, do the y observations
+        bookendFId = attemptFId(fid('y'), fid('z'))
+        filterIds.append(bookendFId)
+        filterIds.append(bookendFId)
+
+        # loop through the non-bookend scans. Divide by 4 since we schedule
+        # filters in sets of four scans
+        assert(nScans % 4 == 0)
+        for i in range(int((nScans-4)/4)):
             if filterId not in nightsFilterIds:
                 filterId = inc(filterId)
             moonPhase = sky.phaseOfMoon(time)
             moonRa, moonDec = sky.radecOfMoon(time)
             moonAlt, moonAz = sky.radec2altaz(moonRa, moonDec, time)
-            if (filterId == Telescope.filterId['u'] and
+            if (filterId == fid('u') and
                 moonAlt > Config.moonUMaxAlt and
                 moonPhase > Config.moonUMaxPhase):
 
-                # replace u observations when the moon is up with r observations
-                # unless r is not in the filter changer, in which case observe
-                # in i
-                if self.leftOutFilterIds[direction] == Telescope.filterId['r']:
-                    filterIds.append(Telescope.filterId['i'])
-                else:
-                    filterIds.append(Telescope.filterId['r'])
+                # replace u observations when the moon is up with z observations
+                # unless z is not in the filter changer, in which case observe
+                # in y
+                replaceId = attemptFId(fid('z'), fid('y'))
+                filterIds.append(replaceId)
+            elif filterId == fid('y'):
+                # replace any non-bookend scans that would be y with r (or g)
+                # since we care about r (and g) a lot and y not that much
+                filterIds.append(attemptFId(fid('r'), fid('g')))
             else:
+                # just use the next filterId in line
                 filterIds.append(filterId)
 
-            # repeat the same filter for the next scan
+            # repeat the same filter for the next three scans
+            filterIds.append(filterIds[-1])
+            filterIds.append(filterIds[-1])
             filterIds.append(filterIds[-1])
 
-            if i % 4 == 0:
-                filterId = inc(filterId)
+            filterId = inc(filterId)
             time += timePerScan * 2
+
+        # put on the bookend id for the last 2 scans of the night
+        filterIds.append(bookendFId)
+        filterIds.append(bookendFId)
 
         # set up startFilterId for next night
         # it needs to be incremented by 2, with the leftout filter skipped over
