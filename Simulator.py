@@ -20,7 +20,7 @@ from SummaryPlots import SummaryPlots
 from lsst.sims.ocs.kernel.time_handler import TimeHandler
 from lsst.sims.ocs.environment.cloud_model import CloudModel
 
-from  lsst.sims.speedObservatory.utils import unix2mjd
+from lsst.sims.speedObservatory.utils import unix2mjd
 
 trackMap = False
 showDisp = True and trackMap
@@ -227,6 +227,7 @@ class Simulator:
                 self.curTime += 600
                 deltaT = self.curTime - Config.surveyStartTime
                 cloudCover = self.cloudModel.get_cloud(deltaT)
+                self.sched.notifyNightEnd()
                 return # skip the rest of the night
 
             # if visit is None, that means the scheduler ran out of places
