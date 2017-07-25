@@ -1,7 +1,6 @@
 from __future__ import division
 import numpy as np
 import Config
-from OngoingSurvey import OngoingSurvey
 from lsst.sims.speedObservatory import sky
 from lsst.sims.speedObservatory import Telescope
 from MiniSurvey import MiniSurvey
@@ -28,7 +27,7 @@ class Scheduler:
         self.telescope = telescope
         self.context = context
         # or maybe load from .pkl
-        self.ongoingSurvey = set()
+        self.makeupVPs = set()
 
         # these estimates get updated at the end of each night
         # (currently estAvgExpTime is not updated)
@@ -195,6 +194,9 @@ class Scheduler:
             yield visit
 
     def _scheduleNight(self, nightNum):
+        # this will hold the VPs in tonight's mini survey
+        self.tonightsMini = None
+
         # figure out how many visits we'll probably do tonight
         nightLength = sky.nightLength(Config.surveyStartTime, nightNum)
         # the period of exposure taking is the sum of the exposure time,
@@ -210,25 +212,6 @@ class Scheduler:
         # lose revisits due to weather. May model this at some point
         # (VP = Visit Pair)
         expectedNumVPs = int(expectedNumVisits / 2)
-
-        # for each direction, figure out if we need to add a new mini
-        def topUpVPs(direction):
-            # this helper method tops up VPs in direction, then returns
-            # the VPs in that direction
-            if direction == NORTH:
-                expectedVPsInDir = expectedNumVPs * 1
-            elif direction == SOUTH:
-                expectedVPsInDir = expectedNumVPs * (self.areaInSouth /
-                                       (self.areaInSouth + self.areaInEast))
-            elif direction == EAST:
-                expectedVPsInDir = expectedNumVPs * (self.areaInEast /
-                                       (self.areaInSouth + self.areaInEast))
-
-            pendingVPs = self._calculatePendingVisitPairs(nightNum, direction)
-            while len(pendingVPs) < expectedVPsInDir * NUM_VISITS_PADDING:
-                self._addNewMiniSurvey(nightNum, direction)
-                pendingVPs = self._calculatePendingVisitPairs(nightNum, direction)
-            return pendingVPs
 
         """ here is the scanning pattern:
 
@@ -254,14 +237,35 @@ class Scheduler:
         -------------------------------------
 
         """
-   
+
         if self.nightDirection == NORTH:
-            pendingVPs = topUpVPs(NORTH)
+            makeupVPs = self._getMakeupVPs(nightNum, NORTH)
+            if len(makeupVPs) >= expectedNumVPs * NUM_VISITS_PADDING:
+                # tonight will be a purely makeup night
+                self.tonightsMini = set()
+                tonightsVPs = np.random.choice(list(makeupVPs),
+                                               size=int(expectedNumVPs),
+                                               replace=False)
+            else:
+                # we start with one new minisurvey for tonight and then
+                # fill in the remaining needed visits with makeup VPs
+                self.tonightsMini = self._getNewMiniSurvey(nightNum, NORTH)
+
+                # add to makeupVPs if we still don't have enough visit pairs
+                while(len(self.tonightsMini) + len(makeupVPs) <
+                        expectedNumVPs * NUM_VISITS_PADDING):
+                    self.makeupVPs.update(self._getNewMiniSurvey(nightNum, NORTH))
+                    makeupVPs = self._getMakeupVPs(nightNum, NORTH)
+                tonightsVPs = list(self.tonightsMini)
+                if len(self.tonightsMini) < int(expectedNumVPs):
+                    tonightsVPs.extend(
+                        np.random.choice(list(makeupVPs),
+                                         size=int(expectedNumVPs) - len(self.tonightsMini),
+                                         replace=False)
+                    )
+
             # choose which visitPairs we're going to execute tonight
             # TODO could prioritize doing stale visitPairs
-            tonightsVPs = np.random.choice(list(pendingVPs),
-                                           size=int(expectedNumVPs), 
-                                           replace=False)
             scans = self._generateScans(nightNum, tonightsVPs, NORTH)
             # scanningOrder looks liks [0,1,0,1,2,3,2,3,4,5,4,5,...]
             scanningOrder = (np.arange(len(scans))
@@ -279,20 +283,60 @@ class Scheduler:
             filterIds = self._getFilterIds(nightNum, NORTH, len(scans))
 
         elif self.nightDirection == SOUTHEAST:
-            SPendingVPs = topUpVPs(SOUTH)
-            EPendingVPs = topUpVPs(EAST)
             areaInSouthEast = self.areaInSouth + self.areaInEast
             SExpectedNumVPs = expectedNumVPs * self.areaInSouth / areaInSouthEast
             EExpectedNumVPs = expectedNumVPs * self.areaInEast / areaInSouthEast
-            STonightsVPs = np.random.choice(list(SPendingVPs),
-                                            size=int(SExpectedNumVPs), 
-                                            replace=False)
-            ETonightsVPs = np.random.choice(list(EPendingVPs),
-                                            size=int(EExpectedNumVPs), 
-                                            replace=False)
 
-            #print "S tonight", len(STonightsVPs) / self.areaInSouth
-            #print "E tonight", len(ETonightsVPs) / self.areaInEast
+            SMakeupVPs = self._getMakeupVPs(nightNum, SOUTH)
+            EMakeupVPs = self._getMakeupVPs(nightNum, EAST)
+            if len(SMakeupVPs) >= SExpectedNumVPs * NUM_VISITS_PADDING and \
+               len(EMakeupVPs) >= EExpectedNumVPs * NUM_VISITS_PADDING:
+                # tonight is a makeup  only night
+                self.tonightsMini = set()
+
+                STonightsVPs = np.random.choice(list(SMakeupVPs),
+                                                size=int(SExpectedNumVPs),
+                                                replace=False)
+                ETonightsVPs = np.random.choice(list(EMakeupVPs),
+                                                size=int(EExpectedNumVPs),
+                                                replace=False)
+            else:
+                # make a new mini for the south and east, then fill in each
+                # direction with makeup VPs
+                SMini = self._getNewMiniSurvey(nightNum, SOUTH)
+                EMini = self._getNewMiniSurvey(nightNum, EAST)
+                self.tonightsMini = SMini | EMini
+
+                # if needed, add minis to S and E makeupVPs
+                while(len(SMini) + len(SMakeupVPs) <
+                        SExpectedNumVPs * NUM_VISITS_PADDING):
+                    self.makeupVPs.update(self._getNewMiniSurvey(nightNum, SOUTH))
+                    SMakeupVPs = self._getMakeupVPs(nightNum, SOUTH)
+
+                while(len(EMini) + len(EMakeupVPs) <
+                        EExpectedNumVPs * NUM_VISITS_PADDING):
+                    self.makeupVPs.update(self._getNewMiniSurvey(nightNum, EAST))
+                    EMakeupVPs = self._getMakeupVPs(nightNum, EAST)
+ 
+                # tonights VPs in the South/East consist of tonights mini in
+                # that direction plus a random selection of makeups from that
+                # direction
+                STonightsVPs = list(SMini)
+                ETonightsVPs = list(EMini)
+                if len(SMini) < int(SExpectedNumVPs):
+                    STonightsVPs.extend(
+                        np.random.choice(list(SMakeupVPs),
+                                         size=int(SExpectedNumVPs) - len(SMini),
+                                         replace=False)
+                    )
+                if len(EMini) < int(EExpectedNumVPs):
+                    ETonightsVPs.extend(
+                        np.random.choice(list(EMakeupVPs),
+                                         size=int(EExpectedNumVPs) - len(EMini),
+                                         replace=False)
+                    )
+            #print "S tonight", len(STonightsVPs) #/ self.areaInSouth
+            #print "E tonight", len(ETonightsVPs) #/ self.areaInEast
 
             SScans = self._generateScans(nightNum, STonightsVPs, SOUTH)
             EScans = self._generateScans(nightNum, ETonightsVPs, EAST)
@@ -313,11 +357,12 @@ class Scheduler:
             EMinRas = np.zeros(len(EScansRas))
             for i, ras in enumerate(EScansRas):
                 if len(ras) == 0:
-                    print "nightNum", nightNum
-                    print "nightLen", sky.nightLength(Config.surveyStartTime, nightNum) / 3600
-                    print "EScans len", [len(scan) for scan in EScans]
-                    print "SScans len", [len(scan) for scan in SScans]
-                    print "avgVisitTime", self.estAvgExpTime + self.SEEstAvgSlewTime
+                    # TODO
+                    print "len(ras)=0 :(. nightNum =", nightNum
+                    #print "nightLen", sky.nightLength(Config.surveyStartTime, nightNum) / 3600
+                    #print "EScans len", [len(scan) for scan in EScans]
+                    #print "SScans len", [len(scan) for scan in SScans]
+                    #print "avgVisitTime", self.estAvgExpTime + self.SEEstAvgSlewTime
                     #raise RuntimeError("ras len 0, i=%d" % i)
                     EMinRas[i] = cutoffRa
                     continue
@@ -453,7 +498,7 @@ class Scheduler:
                 # (this happens if weather prevents us from doing
                 #  the revisit)
                 continue
-            
+
             # yield an actual visit, not a visitPair, to the telescope
             (ra, dec) = (visitPair.ra, visitPair.dec)
             expTime = sky.getExpTime(ra, dec, "otherstuff")
@@ -482,11 +527,14 @@ class Scheduler:
         visit.isComplete = True
         visit.timeOfCompletion = time
 
-        # check if we need to delete the visitPair from the ongoingSurvey
+        # check if this visit pair is complete
         visitPair = visit.visitPair
         if visitPair.visit1.isComplete and visitPair.visit2.isComplete:
-            # take the visit out of our ongoing survey
-            self.ongoingSurvey.remove(visitPair)
+            # remove the visit pair from either tonights mini survey
+            # or from the makeup VPs (whichever it happens to be in)
+            # (set.discard removes if the element exists)
+            self.makeupVPs.discard(visitPair)
+            self.tonightsMini.discard(visitPair)
 
             # keep track of our coverage in each direction
             if self._directionOfDec(visitPair.dec) == NORTH:
@@ -506,6 +554,8 @@ class Scheduler:
             self.NEstAvgSlewTime = np.mean(self.curNightSlewTimes)
         elif self.nightDirection == SOUTHEAST:
             self.SEEstAvgSlewTime = np.mean(self.curNightSlewTimes)
+        self.makeupVPs.update(self.tonightsMini)
+        self.tonightsMini = None
 
 
     def _scheduleRestOfNight(self):
@@ -532,8 +582,8 @@ class Scheduler:
         else:
             return SOUTH
 
-    def _calculatePendingVisitPairs(self, nightNum, direction):
-        # return all the visitPairs in ongoingSurvey which have
+    def _getMakeupVPs(self, nightNum, direction):
+        # return all the visitPairs in makeupVPs that have
         # yet to be completed 
         raRange = self._getNightRaRange(nightNum)
         if direction == EAST:
@@ -541,7 +591,7 @@ class Scheduler:
                        raRange[1] + Config.zenithBufferOffset)
 
         visitPairs = set()
-        for visitPair in self.ongoingSurvey:
+        for visitPair in self.makeupVPs:
             if (not visitPair.visit1.isComplete or 
                 not visitPair.visit2.isComplete):
                 # note that this means a visit returned by this function
@@ -552,7 +602,7 @@ class Scheduler:
                     visitPairs.add(visitPair)
         return visitPairs
 
-    def _addNewMiniSurvey(self, nightNum, direction):
+    def _getNewMiniSurvey(self, nightNum, direction):
         # called at the beginning of a night when there aren't 
         # enough pending visits left
 
@@ -560,7 +610,7 @@ class Scheduler:
         #print "new mini on night", nightNum, "with ra: (", raStart, ",", raEnd, ")"
 
         newVisitPairs = MiniSurvey.newMiniSurvey(self.telescope, raStart, raEnd, direction)
-        self.ongoingSurvey.update(newVisitPairs)
+        return newVisitPairs
 
     def _generateScans(self, nightNum, visitPairs, direction):
         # partitions the visits into N/S or E/W scans
