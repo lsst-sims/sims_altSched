@@ -183,6 +183,22 @@ class Scheduler:
                 # for now just stay shuttered the rest of the night
                 return
             alt, az = sky.radec2altaz(visit.ra, visit.dec, self.context.time())
+            if alt < self.telescope.minAlt:
+                # East is +pi/2, so if the field has az < pi, it is rising
+                # and if az > pi then setting
+                if az >= np.pi:
+                    # this field is setting, so skip it
+                    continue
+                else:
+                    # this field is rising, so wait a while until it's
+                    # visible
+                    while alt < self.telescope.minAlt:
+                        # if we yield None the simulator (or the world) will
+                        # progress time for us
+                        yield None
+                        alt, az = sky.radec2altaz(visit.ra, visit.dec,
+                                                  self.context.time())
+                        prevAlt = prevAz = None
             if prevAlt is not None:
                 slewTime = self.telescope.calcSlewTime(prevAlt, prevAz, prevFilter,
                                                        alt, az, visit.filter)
