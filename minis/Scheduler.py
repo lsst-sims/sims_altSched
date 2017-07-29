@@ -364,6 +364,12 @@ class Scheduler:
                     #print "SScans len", [len(scan) for scan in SScans]
                     #print "avgVisitTime", self.estAvgExpTime + self.SEEstAvgSlewTime
                     #raise RuntimeError("ras len 0, i=%d" % i)
+
+                    # this will cause this scan to be scheduled ASAP
+                    # since the scheduler will think there's no time left
+                    # before it hits zenith
+                    # But this is fine since there are no visits in this scan
+                    # anyway.
                     EMinRas[i] = cutoffRa
                     continue
                 if ras.max() - ras.min() > np.pi:
@@ -446,16 +452,16 @@ class Scheduler:
                 for _ in range(4):
                     filterIds.append(SFilterIds.pop(0))
             # we should have added all the East scans by now excepting perhaps one
-            if j < numECols:
+            # but sometimes if a bunch of visits pile up due to weather, we'll
+            # need to add more than one E col at the end, hence the while
+            # instead of if
+            while j < numECols:
                 # TODO duplicate code from above
                 scans += [EScans[2*j], EScans[2*j+1], EScans[2*j], EScans[2*j+1]]
                 scanDirs += [WEST, EAST, WEST, EAST]
                 for _ in range(4):
                     filterIds.append(EFilterIds.pop(0))
                 j += 1
-            if j < numECols - 1:
-                printDebug()
-                raise RuntimeWarning("j=" + str(j) + "!")
 
         for scan, scanDir, filterId in zip(scans, scanDirs, filterIds):
             filter = Telescope.filters[filterId]
