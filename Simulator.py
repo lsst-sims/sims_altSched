@@ -227,13 +227,14 @@ class Simulator:
                 self.curTime += 600
                 deltaT = self.curTime - Config.surveyStartTime
                 cloudCover = self.cloudModel.get_cloud(deltaT)
+
+                # above code makes simulator wait until not cloudy
                 self.sched.notifyNightEnd()
                 return # skip the rest of the night
 
-            # if visit is None, that means the scheduler ran out of places
-            # to point for the night
+            # if visit is None, that means the scheduler has nowhere to point
+            # at the moment
             if visit is None:
-                print "visit is none!"
                 self.curTime += 30
             else:
                 alt, az = sky.radec2altaz(visit.ra, visit.dec, self.time())
