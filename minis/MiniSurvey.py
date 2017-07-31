@@ -131,17 +131,18 @@ class MiniSurvey:
         # removed from the corners
 
         # I'm guessing there's a better way to do this, but here goes...
+        raftWidth = telescope.raftWidth * 0.97
 
         cubeSideLength = np.arccos(1/3) # in radians
-        numRaftsPerCubeSide = int(cubeSideLength / telescope.raftWidth)
+        numRaftsPerCubeSide = int(cubeSideLength / raftWidth)
 
         minU = 0
         minV = 0
 
         # we need to tile enough to be sure that we can completely cover
         # the unfolded cube with the pattern
-        #maxU = int(2 * np.pi / telescope.raftWidth)
-        #maxV = int(np.pi / telescope.raftWidth)
+        #maxU = int(2 * np.pi / raftWidth)
+        #maxV = int(np.pi / raftWidth)
 
         # if you unfold the cube like this:
         #  _
