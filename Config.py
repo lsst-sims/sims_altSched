@@ -32,3 +32,9 @@ moonUMaxPhase = 0.3
 # number of seconds of overhead needed per visit
 # (shutter and potentially intermediate readout times)
 visitOverheadTime = 4
+
+NORTH = 0
+SOUTH = 1
+EAST = 2
+WEST = 3
+SOUTHEAST = 4

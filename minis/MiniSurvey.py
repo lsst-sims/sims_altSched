@@ -8,12 +8,8 @@ from Visit import VisitPair
 import Config
 import Utils
 from astropy import wcs
-import Scheduler # just for cardinal direction constants
 
 class MiniSurvey:
-    NORTH = 0
-    SOUTH = 1
-
     # the very first mini should have rotation -pi/2
     prevRot = -1
     prevPrevRot = -1
@@ -59,15 +55,15 @@ class MiniSurvey:
         # choose a subset of the pointings to get the desired shape:
         # i.e. a rectangle in ra/dec space with the sub-rectangle of
         # latitude \pm zenithBuffer shifted to the East
-        if direction == Scheduler.NORTH:
+        if direction == Config.NORTH:
             minDec = telescope.latitude + Config.zenithBuffer
             maxDec = Config.maxDec
             # min/maxRa remain unchanged
-        elif direction == Scheduler.SOUTH:
+        elif direction == Config.SOUTH:
             minDec = Config.minDec
             maxDec = telescope.latitude - Config.zenithBuffer
             # min/maxRa remain unchanged
-        elif direction == Scheduler.EAST:
+        elif direction == Config.EAST:
             minDec = telescope.latitude - Config.zenithBuffer
             maxDec = telescope.latitude + Config.zenithBuffer
             minRa += Config.zenithBuffer + Config.zenithBufferOffset

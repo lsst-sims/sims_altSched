@@ -1,6 +1,7 @@
 from __future__ import division
 import numpy as np
 import Config
+from Config import NORTH, SOUTH, EAST, WEST, SOUTHEAST
 from lsst.sims.speedObservatory import sky
 from lsst.sims.speedObservatory import Telescope
 from MiniSurvey import MiniSurvey
@@ -15,12 +16,6 @@ import copy
 # add a new mini-survey whenever we dip below this much times
 # the expected number of visits needed in a night
 NUM_VISITS_PADDING = 1
-
-NORTH = 0
-SOUTH = 1
-EAST = 2
-WEST = 3
-SOUTHEAST = 4
 
 class Scheduler:
     def __init__(self, telescope, context):
