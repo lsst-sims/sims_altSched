@@ -5,6 +5,7 @@ from Config import NORTH, SOUTH, EAST, WEST, SOUTHEAST
 from lsst.sims.speedObservatory import sky
 from lsst.sims.speedObservatory import Telescope
 from MiniSurvey import MiniSurvey
+import filtersequence
 from Visit import Visit
 from Visit import VisitPair
 import Utils
@@ -51,101 +52,8 @@ class Scheduler:
         self.NVisitsComplete = 0
         self.EVisitsComplete = 0
 
-        # keep track of which filter we should start out in when looking
-        # in the N, S, and E
-        self.startFilterIds = {NORTH: 0, SOUTH: 0, EAST: 0}
-        self.leftOutFilterIds = {NORTH: 0, SOUTH: 0, EAST: 0}
-
-    def _getFilterIds(self, nightNum, direction, nScans):
-        # note: this method modifies instance state
-        # (start filters and left out filters)
-
-        # helper to increment mod len(Telescope.filters)
-        def inc(filterId):
-            return (filterId + 1) % len(Telescope.filters)
-
-        # decide which filter to leave out of the filter wheel for the night
-        leftOut = self.leftOutFilterIds[direction]
-        self.leftOutFilterIds[direction] = inc(self.leftOutFilterIds[direction])
-
-        nightsFilterIds = range(0, leftOut) + \
-                          range(leftOut + 1, len(Telescope.filters))
-
-
-        # keep track of what time we expect it to be for each scan
-        timePerScan = sky.nightLength(Config.surveyStartTime, nightNum) / nScans
-        time = sky.twilStart(Config.surveyStartTime, nightNum)
-        nightStartTime = sky.nightStart(Config.surveyStartTime, nightNum)
-        nightEndTime   = sky.nightEnd(  Config.surveyStartTime, nightNum)
-
-
-        # build a list `filterId` of filters to use for each of `nScans` scans
-        filterId = self.startFilterIds[direction]
-        filterIds = []
-
-        # helper to choose a filter based on which are available tonight
-        def attemptFId(attemptId, backupId):
-            if attemptId == self.leftOutFilterIds[direction]:
-                return backupId
-            else:
-                return attemptId
-
-        # get the id of a filter such as 'u' or 'r'
-        def fid(filter):
-            return Telescope.filterId[filter]
-
-        # at the beginning and end of each night, do the y observations
-        bookendFId = attemptFId(fid('y'), fid('z'))
-        filterIds.append(bookendFId)
-        filterIds.append(bookendFId)
-
-        # loop through the non-bookend scans. Divide by 4 since we schedule
-        # filters in sets of four scans
-        assert(nScans % 4 == 0)
-        for i in range(int((nScans-4)/4)):
-            if filterId not in nightsFilterIds:
-                filterId = inc(filterId)
-            moonPhase = sky.phaseOfMoon(time)
-            moonRa, moonDec = sky.radecOfMoon(time)
-            moonAlt, moonAz = sky.radec2altaz(moonRa, moonDec, time)
-            if (filterId == fid('u') and
-                moonAlt > Config.moonUMaxAlt and
-                moonPhase > Config.moonUMaxPhase):
-
-                # replace u observations when the moon is up with z observations
-                # unless z is not in the filter changer, in which case observe
-                # in y
-                replaceId = attemptFId(fid('z'), fid('y'))
-                filterIds.append(replaceId)
-            elif filterId == fid('y'):
-                # replace any non-bookend scans that would be y with r (or g)
-                # since we care about r (and g) a lot and y not that much
-                filterIds.append(attemptFId(fid('r'), fid('g')))
-            else:
-                # just use the next filterId in line
-                filterIds.append(filterId)
-
-            # repeat the same filter for the next three scans
-            filterIds.append(filterIds[-1])
-            filterIds.append(filterIds[-1])
-            filterIds.append(filterIds[-1])
-
-            filterId = inc(filterId)
-            time += timePerScan * 2
-
-        # put on the bookend id for the last 2 scans of the night
-        filterIds.append(bookendFId)
-        filterIds.append(bookendFId)
-
-        # set up startFilterId for next night
-        # it needs to be incremented by 2, with the leftout filter skipped over
-        # if necessary
-        for i in range(2):
-            if self.startFilterIds[direction] not in nightsFilterIds:
-                self.startFilterIds[direction] = inc(self.startFilterIds[direction])
-            self.startFilterIds[direction] = inc(self.startFilterIds[direction])
-
-        return filterIds
+    def _getFilters(self, nightNum, direction, nScans):
+        return filtersequence.maxFChanges(nightNum, direction, nScans)
 
     def scheduleNight(self, nightNum):
         # decide which way to point tonight
@@ -286,7 +194,7 @@ class Scheduler:
             scanDirs[0::2] = NORTH
             scanDirs[1::2] = SOUTH
 
-            filterIds = self._getFilterIds(nightNum, NORTH, len(scans))
+            filters = self._getFilters(nightNum, NORTH, len(scans))
 
         elif self.nightDirection == SOUTHEAST:
             areaInSouthEast = self.areaInSouth + self.areaInEast
@@ -346,9 +254,6 @@ class Scheduler:
 
             SScans = self._generateScans(nightNum, STonightsVPs, SOUTH)
             EScans = self._generateScans(nightNum, ETonightsVPs, EAST)
-
-            SFilterIds = self._getFilterIds(nightNum, SOUTH, len(SScans)*2)
-            EFilterIds = self._getFilterIds(nightNum, EAST,  len(EScans)*2)
 
             #print "S scans", len([v for s in SScans for v in s]) / self.areaInSouth
             #print "E scans", len([v for s in EScans for v in s]) / self.areaInEast
@@ -421,9 +326,9 @@ class Scheduler:
                 printDebug()
 
             # now combine the South and East scans together in a good order
-            # into the scans, filterIds, and scanDirs arrays
+            # into the scans, filters, and scanDirs arrays
             scans = []
-            filterIds = []
+            filters = []
             scanDirs = []
             cumTime = 0
             # j keeps track of which East scan we should add next
@@ -443,8 +348,6 @@ class Scheduler:
                 if j < numECols and paddedTime > timesLeft[j] - execTimes[j]:
                     scans += [EScans[2*j], EScans[2*j+1], EScans[2*j], EScans[2*j+1]]
                     scanDirs += [WEST, EAST, WEST, EAST]
-                    for _ in range(4):
-                        filterIds.append(EFilterIds.pop(0))
                     ENumNewVisits = len(EScans[2*j]) + len(EScans[2*j+1])
                     cumTime += 2 * ENumNewVisits * avgVisitTime
                     j += 1
@@ -455,8 +358,7 @@ class Scheduler:
                 # a buildup in one southern scan
                 scans += [SScans[i], SScans[i+1], SScans[i], SScans[i+1]]
                 scanDirs += [SOUTH, NORTH, SOUTH, NORTH]
-                for _ in range(4):
-                    filterIds.append(SFilterIds.pop(0))
+
             # we should have added all the East scans by now excepting perhaps one
             # but sometimes if a bunch of visits pile up due to weather, we'll
             # need to add more than one E col at the end, hence the while
@@ -465,12 +367,11 @@ class Scheduler:
                 # TODO duplicate code from above
                 scans += [EScans[2*j], EScans[2*j+1], EScans[2*j], EScans[2*j+1]]
                 scanDirs += [WEST, EAST, WEST, EAST]
-                for _ in range(4):
-                    filterIds.append(EFilterIds.pop(0))
                 j += 1
 
-        for scan, scanDir, filterId in zip(scans, scanDirs, filterIds):
-            filter = Telescope.filters[filterId]
+            filters = self._getFilters(nightNum, SOUTHEAST, len(scans))
+
+        for scan, scanDir, filt in zip(scans, scanDirs, filters):
             if scanDir == NORTH:
                 sortedScan = sorted(scan, key=lambda v: v.dec)
             elif scanDir == SOUTH:
@@ -486,12 +387,12 @@ class Scheduler:
             else:
                 raise RuntimeError("invalid direction " + str(scanDir))
 
-    
-            for visit in self._schedulePath(sortedScan, nightNum, filter):
+
+            for visit in self._schedulePath(sortedScan, nightNum, filt):
                 yield visit
 
 
-    def _schedulePath(self, path, nightNum, filter):
+    def _schedulePath(self, path, nightNum, filt):
         for visitPair in path:
 
             """
@@ -522,11 +423,11 @@ class Scheduler:
 
             if not visitPair.visit1.isComplete:
                 visitPair.visit1.expTime = expTime
-                visitPair.visit1.filter = filter
+                visitPair.visit1.filter = filt
                 yield visitPair.visit1
             else:
                 visitPair.visit2.expTime = expTime
-                visitPair.visit2.filter = filter
+                visitPair.visit2.filter = filt
                 yield visitPair.visit2
 
     def notifyVisitComplete(self, visit, time):
@@ -568,6 +469,7 @@ class Scheduler:
             self.SEEstAvgSlewTime = np.mean(self.curNightSlewTimes)
         self.makeupVPs.update(self.tonightsMini)
         self.tonightsMini = None
+        filtersequence.notifyNightCompleted(self.nightDirection)
 
 
     def _scheduleRestOfNight(self):
