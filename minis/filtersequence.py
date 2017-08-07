@@ -27,7 +27,7 @@ def _attemptFilter(direction, attempt, backup):
     else:
         return attempt
 
-def notifyNightCompleted(direction):
+def maxFChangesNightOver(direction):
     # set up startFilterId for next night
     # it needs to be incremented by 2, with the leftout filter skipped over
     # if necessary 
@@ -88,6 +88,17 @@ def twoFChanges(nightNum, direction, nScans):
     fs.append(bookendFilter)
 
     return fs
+
+def twoFChangesNightOver(direction):
+    nextFilter = _inc(_startFilters[direction])
+    if _startFilters[direction] == _leftOutFilters[direction]:
+        _startFilters[direction] = nextFilter
+        nextFilter = _inc(nextFilter)
+    _startFilters[direction] = nextFilter
+
+    # also update the left-out filter
+    _leftOutFilters[direction] = _inc(_leftOutFilters[direction])
+
 
 def maxFChanges(nightNum, direction,  nScans):
     # keep track of what time we expect it to be for each scan
