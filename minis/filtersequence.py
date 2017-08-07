@@ -36,6 +36,7 @@ def notifyNightCompleted(direction):
         nextFilter = _inc(_startFilters[direction])
         if _startFilters[direction] == _leftOutFilters[direction]:
             _startFilters[direction] = nextFilter
+            nextFilter = _inc(nextFilter)
         _startFilters[direction] = nextFilter
 
     # also update the left-out filter
