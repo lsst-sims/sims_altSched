@@ -3,6 +3,7 @@ from lsst.sims.speedObservatory import Telescope
 from lsst.sims.speedObservatory import sky
 from Config import NORTH, SOUTHEAST
 import Config
+import numpy as np
 
 # keep track of which filter we should start out in when looking
 # in the N, S, and E
@@ -78,7 +79,10 @@ def twoFChanges(nightNum, direction, nScans):
     if f == "y":
         f = _attemptFilter(direction, "r", "i")
     if f in _avoidFilters(nightStartTime) or f in _avoidFilters(nightEndTime):
-        f = _attemptFilter(direction, "z", "y")
+        if np.random.rand() < 0.5:
+            f = _attemptFilter(direction, "i", "y")
+        else:
+            f = _attemptFilter(direction, "z", "y")
 
     for i in range(int((nScans-4))):
         fs.append(f)
