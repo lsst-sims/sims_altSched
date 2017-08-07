@@ -120,8 +120,7 @@ class Simulator:
             self.outFile.write("time (mjd), ra (rads), dec (rads), filter\n")
 
         # run the survey!
-        numSimulatedNights = int(surveyYears * 365.25)
-        for nightNum in range(numSimulatedNights):
+        for nightNum in range(Config.surveyNumNights):
             print "Night:", nightNum, "\r",
             sys.stdout.flush()
             if nightNum in downtimeNights:
