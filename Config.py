@@ -38,6 +38,12 @@ moonUMaxPhase = 0.3
 moonGMaxAlt = np.radians(20)
 moonGMaxPhase = 0.6
 
+# number of seconds of exposure time for DD visits
+DDExpTime = 60 * 60
+
+# number of seconds of exposure time for WFD visits
+WFDExpTime = 30
+
 # number of seconds of overhead needed per visit
 # (shutter and potentially intermediate readout times)
 visitOverheadTime = 4

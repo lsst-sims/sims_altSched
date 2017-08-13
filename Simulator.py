@@ -5,6 +5,7 @@ from graphics.GraphicalMonitor import GraphicalMonitor
 
 import numpy as np
 from minis.Scheduler import Scheduler
+from Visit import PROP_WFD, PROP_DD
 import Config
 from lsst.sims.speedObservatory import sky
 from lsst.sims.speedObservatory import Telescope
@@ -116,8 +117,8 @@ class Simulator:
 
         # write the header to the output file if writeCsv flag is set
         if writeCsv:
-            self.outFile = open("results/fewerFChanges.csv", "w")
-            self.outFile.write("time (mjd), ra (rads), dec (rads), filter\n")
+            self.outFile = open("results/dd_4vo_maxf_lax_3set_105/dd_4vo_maxf_lax_3set_105.csv", "w")
+            self.outFile.write("time,prop,ra,dec,filter\n")
 
         # run the survey!
         for nightNum in range(Config.surveyNumNights):
@@ -262,34 +263,42 @@ class Simulator:
 
                 # figure out how far we have to slew
                 if i > 0:
+                    # Don't change laxDome param without changing in
+                    # Simulator too
                     slewTime = self.tel.calcSlewTime(prevAlt, prevAz, prevFilter,
-                                                     alt, az, visit.filter)
+                                                     alt, az, visit.filter,
+                                                     laxDome = True)
+
+                if i > 0:
+                    # TODO will need to avoid adding slew time
+                    # once we reopen after clouds
+                    self.curTime += slewTime
+                    self.slewTimes.append(slewTime)
 
                 # notify the skyMap of the visit
+                # (the time of the visit is the time after the slew but
+                # before the exposure)
                 if trackMap:
                     self.skyMap.addVisit(visit, self.curTime)
 
+
+                expTime = visit.expTime
+                if writeCsv:
+                    assert(visit.prop == PROP_WFD or visit.prop == PROP_DD)
+                    prop = "wfd" if visit.prop == PROP_WFD else "dd"
+                    self.outFile.write(str(unix2mjd(self.time())) + "," +
+                                       prop + "," +
+                                       str(visit.ra) + "," +
+                                       str(visit.dec) + "," +
+                                       visit.filter + "\n")
+
                 # add the exposure time of this visit to the current time
-                expTime = sky.getExpTime(visit.ra, visit.dec)
                 self.curTime += expTime
                 self.curTime += Config.visitOverheadTime
-                if i > 0:
-                    self.curTime += slewTime
-                    self.slewTimes.append(slewTime)
-                if writeCsv:
-                    self.outFile.write(str(unix2mjd(self.time())) + "," + \
-                                       str(visit.ra) + "," + \
-                                       str(visit.dec) + "," + \
-                                       visit.filter + "\n")
+
                 # let the scheduler know we "carried out" this visit
                 self.sched.notifyVisitComplete(visit, self.time())
 
-                # keep track of revisit times
-                visit1 = visit.visitPair.visit1
-                visit2 = visit.visitPair.visit2
-                if visit1.isComplete and visit2.isComplete:
-                    self.revisitTimes.append(np.abs(visit1.timeOfCompletion - \
-                                                    visit2.timeOfCompletion))
                 prevAlt = alt
                 prevAz = az
                 prevFilter = visit.filter

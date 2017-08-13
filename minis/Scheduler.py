@@ -2,6 +2,7 @@ from __future__ import division
 import numpy as np
 import Config
 from Config import NORTH, SOUTH, EAST, WEST, SOUTHEAST
+from Visit import PROP_WFD, PROP_DD
 from lsst.sims.speedObservatory import sky
 from lsst.sims.speedObservatory import Telescope
 from MiniSurvey import MiniSurvey
@@ -12,6 +13,7 @@ import Utils
 
 from matplotlib import pyplot as plt
 import copy
+import csv
 
 
 # add a new mini-survey whenever we dip below this much times
@@ -52,6 +54,16 @@ class Scheduler:
         self.NVisitsComplete = 0
         self.EVisitsComplete = 0
 
+        # read in DD field centers
+        self.ddFieldCenters = []
+        with open("ddFields.csv", "r") as ddFile:
+            fields = csv.DictReader(ddFile)
+            for field in fields:
+                ra = float(field["ra"])
+                dec = float(field["dec"])
+                self.ddFieldCenters.append((ra, dec))
+
+
     def _getFilters(self, nightNum, direction, nScans):
         return filtersequence.maxFChanges(nightNum, direction, nScans)
 
@@ -76,7 +88,7 @@ class Scheduler:
         prevAlt = prevAz = None
         prevFilter = self.telescope.filters[0]
 
-        # return each visit prescribed by scheduleNight()
+        # return each visit prescribed by _scheduleNight()
         prevTime = None
         for visit in self._scheduleNight(nightNum):
             time = self.context.time()
@@ -98,8 +110,10 @@ class Scheduler:
                                                   self.context.time())
                         prevAlt = prevAz = None
             if prevAlt is not None:
+                # Don't change laxDome param without changing in Simulator too
                 slewTime = self.telescope.calcSlewTime(prevAlt, prevAz, prevFilter,
-                                                       alt, az, visit.filter)
+                                                       alt, az, visit.filter,
+                                                       laxDome = True)
                 self.curNightSlewTimes.append(slewTime)
             prevAlt = alt
             prevAz = az
@@ -107,9 +121,65 @@ class Scheduler:
             prevTime = time
             yield visit
 
+    # TODO confusing why we have scheduleNight() and _scheduleNight()
     def _scheduleNight(self, nightNum):
         # this will hold the VPs in tonight's mini survey
         self.tonightsMini = None
+
+        # figure out what DD visit we're going to do tonight
+        self.DDVisit = None
+        nightStart = sky.nightStart(Config.surveyStartTime, nightNum)
+        nightEnd = sky.nightEnd(Config.surveyStartTime, nightNum)
+        minRa = sky.raOfMeridian(nightStart)
+        maxRa = sky.raOfMeridian(nightEnd)
+        for ra, dec in self.ddFieldCenters:
+            # check if the night will end before we could finish
+            # the DD exposure
+            # raBuffer is how far the sky will move during the exposure
+            raBuffer = Config.DDExpTime / (24*3600) * 2*np.pi
+
+            DDDirection = self._directionOfDec(dec)
+
+            if DDDirection == NORTH:
+                inRaRange = Utils.isRaInRange(ra, (minRa, maxRa - raBuffer))
+            elif DDDirection == SOUTH:
+                inRaRange = Utils.isRaInRange(ra, (minRa, maxRa - raBuffer))
+                DDDirection = SOUTHEAST
+            elif DDDirection == EAST:
+                # DD visits in the East need to be in the offset
+                # allowable RA range
+                raRange = (minRa + Config.zenithBufferOffset + raBuffer,
+                           maxRa + Config.zenithBufferOffset - raBuffer)
+                inRaRange = Utils.isRaInRange(ra, raRange)
+                DDDirection = SOUTHEAST
+
+            # the DD ra must be less than maxRa - raBuffer so that
+            # the night doesn't end while the DD exposure is happening
+            if inRaRange and DDDirection == self.nightDirection:
+                self.DDVisit = Visit(PROP_DD, None, ra, dec, 0, Config.DDExpTime, 'u')
+                break
+        # XXX don't return DD
+        #self.DDVisit = None
+
+        # helper for later to check if a DD visit falls within the min/max
+        # RA range of a revisit group
+        def isDDVisitInRevisitGroup(revisitGroup):
+            scan1 = revisitGroup["scan1"]
+            scan2 = revisitGroup["scan2"]
+            if len(scan1) == 0 and len(scan2) == 0:
+                    return False
+            ras = np.array([vp.ra for vp in revisitGroup["scan1"]] +
+                           [vp.ra for vp in revisitGroup["scan2"]])
+            if ras.max() - ras.min() > np.pi:
+                # scans are never > 180 degrees in ra, so if true, the scan
+                # must cross the 2pi boundary
+                maxRa = ((ras + np.pi) % (2*np.pi)).max() - np.pi
+                minRa = ((ras + np.pi) % (2*np.pi)).min() - np.pi
+            else:
+                maxRa = ras.max()
+                minRa = ras.min()
+            return Utils.isRaInRange(self.DDVisit.ra, (minRa, maxRa))
+
 
         # figure out how many visits we'll probably do tonight
         nightLength = sky.nightLength(Config.surveyStartTime, nightNum)
@@ -121,7 +191,15 @@ class Scheduler:
         elif self.nightDirection == SOUTHEAST:
             t = self.SEEstAvgSlewTime
         t += self.estAvgExpTime + Config.visitOverheadTime
-        expectedNumVisits = int(nightLength / t)
+        if self.DDVisit is None:
+            # we won't do a DD visit tonight
+            expectedNumVisits = int(nightLength / t)
+        else:
+            # we do plan to do a DD visit tonight, so the amount of time
+            # available for WFD exposures is nightLength - DDexpTime
+            # TODO this doesn't include slew time to/from the DD field
+            expectedNumVisits = int((nightLength - self.DDVisit.expTime) / t)
+
         # TODO it might be greater than numVisits / 2 if we expect to
         # lose revisits due to weather. May model this at some point
         # (VP = Visit Pair)
@@ -181,20 +259,25 @@ class Scheduler:
             # choose which visitPairs we're going to execute tonight
             # TODO could prioritize doing stale visitPairs
             scans = self._generateScans(nightNum, tonightsVPs, NORTH)
-            # scanningOrder looks liks [0,1,0,1,2,3,2,3,4,5,4,5,...]
-            scanningOrder = (np.arange(len(scans))
-                               .reshape(int(len(scans)/2), 2)
-                               .repeat(2, axis=0)
-                               .flatten())
-            scans = [scans[i] for i in scanningOrder]
+            filters = self._getFilters(nightNum, NORTH, len(scans)*2)
 
-            # scanDirs are the directions to execute each scan in
-            # in this case we start out going north, then south, etc
-            scanDirs = np.zeros(len(scans))
-            scanDirs[0::2] = NORTH
-            scanDirs[1::2] = SOUTH
+            # a revisitGroup is a pair of scans with info on how to
+            # execute them
+            revisitGroups = []
+            for i in range(0, len(scans), 2):
+                revisitGroup = {"scan1": scans.pop(0),
+                                "scan2": scans.pop(0),
+                                "scanDir1": NORTH,
+                                "scanDir2": SOUTH,
+                                "filter1": filters.pop(0),
+                                "filter2": filters.pop(0),
+                                "filter3": filters.pop(0),
+                                "filter4": filters.pop(0)}
+                revisitGroups.append(revisitGroup)
 
-            filters = self._getFilters(nightNum, NORTH, len(scans))
+            # we should have used up all the scans and filters
+            assert(len(filters) == 0)
+            assert(len(scans) == 0)
 
         elif self.nightDirection == SOUTHEAST:
             areaInSouthEast = self.areaInSouth + self.areaInEast
@@ -255,6 +338,13 @@ class Scheduler:
             SScans = self._generateScans(nightNum, STonightsVPs, SOUTH)
             EScans = self._generateScans(nightNum, ETonightsVPs, EAST)
 
+            # TODO confusing use of the word scan to mean both a single vertical
+            # strip of visits (that gets executed twice) and a single execution
+            # of a verticle strip.
+            nSScans = len(SScans)
+            nScans = (len(SScans) + len(EScans)) * 2
+            filters = self._getFilters(nightNum, SOUTHEAST, nScans)
+
             #print "S scans", len([v for s in SScans for v in s]) / self.areaInSouth
             #print "E scans", len([v for s in EScans for v in s]) / self.areaInEast
 
@@ -269,7 +359,7 @@ class Scheduler:
             for i, ras in enumerate(EScansRas):
                 if len(ras) == 0:
                     # TODO
-                    print "len(ras)=0 :(. nightNum =", nightNum
+                    #print "len(ras)=0 :(. nightNum =", nightNum
                     #print "nightLen", sky.nightLength(Config.surveyStartTime, nightNum) / 3600
                     #print "EScans len", [len(scan) for scan in EScans]
                     #print "SScans len", [len(scan) for scan in SScans]
@@ -327,9 +417,26 @@ class Scheduler:
 
             # now combine the South and East scans together in a good order
             # into the scans, filters, and scanDirs arrays
-            scans = []
-            filters = []
-            scanDirs = []
+
+            # helper to make a revisitGroup -- a pair of scans with info
+            # about how to execute them
+            def newRevisitGroup(direction):
+                assert(direction == EAST or direction == SOUTH)
+                scans = EScans if direction == EAST else SScans
+                revisitGroup = {"scan1": scans.pop(0),
+                                "scan2": scans.pop(0),
+                                "scanDir1": WEST if direction == EAST else SOUTH,
+                                "scanDir2": EAST if direction == EAST else NORTH,
+                                "filter1": filters.pop(0),
+                                "filter2": filters.pop(0),
+                                "filter3": filters.pop(0),
+                                "filter4": filters.pop(0)}
+                return revisitGroup
+
+
+            # a revisitGroup is a pair of scans with info about how to
+            # execute them
+            revisitGroups = []
             cumTime = 0
             # j keeps track of which East scan we should add next
             j = 0
@@ -337,59 +444,106 @@ class Scheduler:
             # (i.e. if we added another South scan before the next East scan,
             #  we wouldn't have time to complete the East scan before it hit
             #  the zenith avoidance zone)
-            for i in range(0, len(SScans), 2):
+            for i in range(0, nSScans, 2):
                 # consider whether to add Southern scan i
-                numNewVisits = len(SScans[i]) + len(SScans[i+1])
+
+                # visits get popped off the front of SScans so we always
+                # consider positions 0 and 1
+                numNewVisits = len(SScans[0]) + len(SScans[1])
                 # this is how long it would take us to complete the next
                 # Southern scan
                 cumTime += 2 * numNewVisits * avgVisitTime
                 paddedTime = cumTime + 0.1 * numNewVisits * avgVisitTime
-                # add an East scan first if we've run out of time
+
+                # add an East scan if we've run out of time
+                # before the scan hits the zenith avoid zone
                 if j < numECols and paddedTime > timesLeft[j] - execTimes[j]:
-                    scans += [EScans[2*j], EScans[2*j+1], EScans[2*j], EScans[2*j+1]]
-                    scanDirs += [WEST, EAST, WEST, EAST]
-                    ENumNewVisits = len(EScans[2*j]) + len(EScans[2*j+1])
+                    ERevisitGroup = newRevisitGroup(EAST)
+                    revisitGroups.append(ERevisitGroup)
+                    ENumNewVisits = (len(ERevisitGroup["scan1"]) +
+                                     len(ERevisitGroup["scan2"]))
                     cumTime += 2 * ENumNewVisits * avgVisitTime
+
+                    # add to cumTime if we know we'll schedule the DD visit
+                    # after this revisit group
+                    if (self.DDVisit is not None and
+                            isDDVisitInRevisitGroup(ERevisitGroup)):
+                        # TODO this doesn't include the slew time to/from
+                        # the DD field
+                        cumTime += self.DDVisit.expTime
                     j += 1
                 # now add the South scan. Note this assumes that we never need
                 # to add two East scans in a row in order to keep out of the
                 # zenith avoidance region, which seems like a reasonable assumption
                 # TODO but might be false in the case of extreme weather causing
                 # a buildup in one southern scan
-                scans += [SScans[i], SScans[i+1], SScans[i], SScans[i+1]]
-                scanDirs += [SOUTH, NORTH, SOUTH, NORTH]
+                SRevisitGroup = newRevisitGroup(SOUTH)
+
+                # add to cumTime if we know we'll schedule the DD visit after
+                # this revisit group
+                if (self.DDVisit is not None and
+                        isDDVisitInRevisitGroup(SRevisitGroup)):
+                    # TODO this ignores the slew time to/from the DD field
+                    cumTime += self.DDVisit.expTime
+                revisitGroups.append(SRevisitGroup)
 
             # we should have added all the East scans by now excepting perhaps one
             # but sometimes if a bunch of visits pile up due to weather, we'll
             # need to add more than one E col at the end, hence the while
             # instead of if
             while j < numECols:
-                # TODO duplicate code from above
-                scans += [EScans[2*j], EScans[2*j+1], EScans[2*j], EScans[2*j+1]]
-                scanDirs += [WEST, EAST, WEST, EAST]
+                revisitGroups.append(newRevisitGroup(EAST))
                 j += 1
 
-            filters = self._getFilters(nightNum, SOUTHEAST, len(scans))
+            # we should have put all the filters and scans into revisit groups
+            assert(len(filters) == 0)
+            assert(len(EScans) == 0)
+            assert(len(SScans) == 0)
 
-        for scan, scanDir, filt in zip(scans, scanDirs, filters):
-            if scanDir == NORTH:
-                sortedScan = sorted(scan, key=lambda v: v.dec)
-            elif scanDir == SOUTH:
-                sortedScan = sorted(scan, key=lambda v: -1*v.dec)
-            elif scanDir == EAST:
-                (raMin, raMax) = self._getNightRaRange(nightNum)
-                # subtract raMin so we never cross 2\pi (since a scan
-                # is never more than 2\pi radians long in RA)
-                sortedScan = sorted(scan, key=lambda v: (v.ra - raMin) % (2*np.pi))
-            elif scanDir == WEST:
-                (raMin, raMax) = self._getNightRaRange(nightNum)
-                sortedScan = sorted(scan, key=lambda v: -1 * (v.ra - raMin) % (2*np.pi))
-            else:
-                raise RuntimeError("invalid direction " + str(scanDir))
+        # now schedule each revisit group
+        for rg in revisitGroups:
+            # perform scan1 and scan2 twice in a row but use
+            # potentially-different filters the second time through
+            for scan, scanDir, filt in [(rg["scan1"], rg["scanDir1"], rg["filter1"]),
+                                        (rg["scan2"], rg["scanDir2"], rg["filter2"]),
+                                        (rg["scan1"], rg["scanDir1"], rg["filter3"]),
+                                        (rg["scan2"], rg["scanDir2"], rg["filter4"])]:
+                if scanDir == NORTH:
+                    sortedScan = sorted(scan, key=lambda v: v.dec)
+                elif scanDir == SOUTH:
+                    sortedScan = sorted(scan, key=lambda v: -1*v.dec)
+                elif scanDir == EAST:
+                    (raMin, raMax) = self._getNightRaRange(nightNum)
+                    # subtract raMin so we never cross 2\pi (since a scan
+                    # is never more than 2\pi radians long in RA)
+                    sortedScan = sorted(scan, key=lambda v: (v.ra - raMin) % (2*np.pi))
+                elif scanDir == WEST:
+                    (raMin, raMax) = self._getNightRaRange(nightNum)
+                    sortedScan = sorted(scan, key=lambda v: -1 * (v.ra - raMin) % (2*np.pi))
+                else:
+                    raise RuntimeError("invalid direction " + str(scanDir))
 
+                for visit in self._schedulePath(sortedScan, nightNum, filt):
+                    yield visit
 
-            for visit in self._schedulePath(sortedScan, nightNum, filt):
-                yield visit
+            # figure out whether we need to add a DD field between
+            # revisitGroups. If self.DDVisit is None, we've
+            # already completed the visit
+            if self.DDVisit is None:
+                continue
+
+            # now check if we're at the correct point during the night to
+            # execute the DD visit
+
+            # TODO this will miss the DD if it happens to fall exactly between
+            # the maxRa of one revisitGroup and the minRa of the next
+            # we should really calculate the minimum ra_{meridian} - ra_{dd}
+            # over all times between revisit groups and execute it there
+            if self.DDVisit is not None and isDDVisitInRevisitGroup(rg):
+                yield self.DDVisit
+                # we don't keep track of whether the DD visit was actually
+                # executed, so just indicate that we scheduled it
+                self.DDVisit = None
 
 
     def _schedulePath(self, path, nightNum, filt):
@@ -414,7 +568,7 @@ class Scheduler:
 
             # yield an actual visit, not a visitPair, to the telescope
             (ra, dec) = (visitPair.ra, visitPair.dec)
-            expTime = sky.getExpTime(ra, dec, "otherstuff")
+            expTime = Config.WFDExpTime
 
             # make sure the night won't end before this exposure completes
             twilEnd = sky.twilEnd(Config.surveyStartTime, nightNum)
@@ -442,6 +596,16 @@ class Scheduler:
 
         # check if this visit pair is complete
         visitPair = visit.visitPair
+        if visitPair == None:
+            # this visit is not part of a visit pair, so it must be
+            # a DD visit
+            assert(visit.prop == PROP_DD)
+            # we don't currently keep track of which DD visits are
+            # actually carried out, so just return
+            return
+
+        # visits with a non-None visit pair are WFD visits
+        assert(visit.prop == PROP_WFD)
         if visitPair.visit1.isComplete and visitPair.visit2.isComplete:
             # remove the visit pair from either tonights mini survey
             # or from the makeup VPs (whichever it happens to be in)
@@ -469,7 +633,7 @@ class Scheduler:
             self.SEEstAvgSlewTime = np.mean(self.curNightSlewTimes)
         self.makeupVPs.update(self.tonightsMini)
         self.tonightsMini = None
-        filtersequence.notifyNightCompleted(self.nightDirection)
+        filtersequence.maxFChangesNightOver(self.nightDirection)
 
 
     def _scheduleRestOfNight(self):

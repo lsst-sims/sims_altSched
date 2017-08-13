@@ -1,3 +1,6 @@
+PROP_WFD = 0
+PROP_DD = 1
+
 class VisitPair:
     def __init__(self, ra, dec, rotation):
 
@@ -8,8 +11,8 @@ class VisitPair:
         # these are generated at the time of the exposure since we don't
         # know what exposure time to use until then
 
-        self.visit1 = Visit(self, ra, dec, rotation, -1)
-        self.visit2 = Visit(self, ra, dec, rotation, -1)
+        self.visit1 = Visit(PROP_WFD, self, ra, dec, rotation, -1)
+        self.visit2 = Visit(PROP_WFD, self, ra, dec, rotation, -1)
 
     def __repr__(self):
         return "RA: " + str(self.ra) + \
@@ -18,7 +21,9 @@ class VisitPair:
 
 class Visit:
     # TODO ExpParams?
-    def __init__(self, visitPair, ra, dec, rotation, expTime, filter=None):
+    def __init__(self, prop, visitPair, ra, dec, rotation, expTime, filter=None):
+        self.prop = prop
+        # if prop is WFD, this visit will be part of a visitpair
         self.visitPair = visitPair
 
         self.ra = ra
