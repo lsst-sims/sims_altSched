@@ -1,35 +1,37 @@
 from __future__ import division
 
-from Telescope import Telescope
+from lsst.sims.speedObservatory import Telescope
 import sqlite3
 from matplotlib import pyplot as plt
 import numpy as np
 
-conn = sqlite3.connect("../opsim_runs/minion_1012_sqlite.db")
+conn = sqlite3.connect("../opsim_runs/minion_1020_sqlite.db")
 c = conn.cursor()
 
 mySlewTimes = []
 theirSlewTimes = []
 
-prevAltaz = np.zeros(2)
+prevAlt = 0
+prevAz = 0
 prevNight = -1
 prevFilter = 'r'
 
 i = 0
 tel = Telescope()
 for alt, az, filter, night, slewTime in c.execute("select altitude, azimuth, filter, night, slewTime from Summary group by expMJD"):
-    altaz = np.array([alt, az])
-    mySlewTime = tel.calcSlewTime(prevAltaz, prevFilter, np.array([alt, az]), filter)
+    mySlewTime = tel.calcSlewTime(prevAlt, prevAz, prevFilter,
+                                  alt, az, filter, laxDome = False)
 
     if prevNight == night:
         mySlewTimes.append(mySlewTime)
         theirSlewTimes.append(slewTime)
 
-    prevAltaz = altaz
+    prevAlt = alt
+    prevAz = az
     prevFilter = filter
     prevNight = night
     i += 1
-    if i > 1000:
+    if i > 10000000000:
         break
 
 mySlewTimes = np.array(mySlewTimes)
@@ -37,6 +39,7 @@ theirSlewTimes = np.array(theirSlewTimes)
 
 print "my mean", np.mean(mySlewTimes), ", median", np.median(mySlewTimes), ", std", np.std(mySlewTimes)
 print "their mean", np.mean(theirSlewTimes), ", median", np.median(theirSlewTimes), ", std", np.std(theirSlewTimes)
+exit()
 
 bins = [i/2 for i in range(260)]
 plt.title("Histogram of slew times as calculated by opsim")
@@ -65,9 +68,9 @@ print "rank @ half total cum / # slews", np.searchsorted(cum, cum[-1]/2) / len(c
 
 # show agreement between my calculated slew times and their calculated slew times
 plt.figure()
-plt.title("Agreement between my and their slew calculations")
-plt.xlabel("Their slew time (sec)")
-plt.ylabel("My slew time (sec)")
+plt.title("Agreement between minion_1020 and sims_speedObservatory")
+plt.xlabel("minion_1020 slew time (sec)")
+plt.ylabel("sims_speedObservatory slew time (sec)")
 plt.scatter(theirSlewTimes, mySlewTimes)
 
 minTime = min(mySlewTimes)
