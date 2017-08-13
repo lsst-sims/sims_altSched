@@ -18,9 +18,15 @@ minDec = np.radians(-90)
 EScanWidth = np.radians(30)
 
 # buffer zone near the zenith to the N/S/E 
-# TODO these probably shouldn't change, so probably shouldn't be config vars
+# TODO these probably shouldn't change, so maybe shouldn't be config vars
+# otoh zenithBufferOffset is a free parameters that'll change the survey
+# properties
+# TODO these names are terrible I have no idea what they are w/o the comment
 tel = Telescope()
+# zenithBuffer is half of the width of the zenith dec band
 zenithBuffer = 2 * tel.fovWidth
+# zenithBufferOffset is the distance the zenith dec band is offset
+# in RA so that you avoid the zenith avoidance zone
 zenithBufferOffset = 4 * tel.fovWidth
 
 # don't observe when the cloud is more than maxCloudCover cloudy
