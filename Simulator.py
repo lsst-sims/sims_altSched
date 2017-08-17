@@ -347,10 +347,6 @@ class Simulator:
     def time(self):
         return self.curTime
 
-def runSimWorker(tel):
-    sim = Simulator()
-    return sim.run(tel)
-
 def runDefaultSim():
     sim = Simulator()
     # use a telescope with default parameters
@@ -359,40 +355,3 @@ def runDefaultSim():
 
 if __name__ == "__main__":
     runDefaultSim()
-    exit()
-    domAzMaxSpeed = 1.5
-    domAzMaxSpeeds = np.arange(1.5, 2.1, 0.1)
-    domAltMaxSpeeds = np.arange(1.75, 4, 0.25)
-    domAltMaxSpeed = 1.75
-    #domAltMaxSpeeds = np.arange(1.75, 2.25, 0.25)
-    settleTimes = np.arange(2.8,3.1,0.1)
-    #settleTimes = np.arange(2.5,3,0.25)
-    results = np.zeros((len(domAzMaxSpeeds), len(settleTimes)))
-    print
-    print "tot:", len(domAzMaxSpeeds)
-    print
-    for i, domAzMaxSpeed in enumerate(domAzMaxSpeeds):
-        print
-        print "i:", i
-        print
-        p = Pool(8)
-        tels = [Telescope() for settleTime in settleTimes]
-        for tel, settleTime in zip(tels, settleTimes):
-            tel.domAltMaxSpeed = domAltMaxSpeed
-            tel.domAzMaxSpeed = domAzMaxSpeed
-            tel.settleTime = settleTime
-        row = p.map(runSimWorker, tels)
-        results[-i-1,:] = row
-        #for j, settleTime in enumerate(settleTimes):
-        #    sim = Simulator()
-        #    results[-i-1, j] = sim.run(domAltMaxSpeed, domAzMaxSpeed, settleTime)
-    print results.tolist()
-    plt.matshow(results, extent=[settleTimes.min(), settleTimes.max(), domAzMaxSpeeds.min(), domAzMaxSpeeds.max()])
-    ax = plt.gca()
-    ax.set_xticks(settleTimes[::5])
-    ax.set_yticks(domAzMaxSpeeds[::5])
-    plt.colorbar()
-    plt.title("Total Number of Visits (six-month sims)")
-    plt.xlabel("Settle Time (secs)")
-    plt.ylabel("Dome Azimuth Max Speed (deg/sec)")
-    plt.show()
