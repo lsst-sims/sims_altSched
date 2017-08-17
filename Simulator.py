@@ -40,57 +40,8 @@ class Simulator:
     def __init__(self):
         pass
 
-    @staticmethod
-    def getUpdateRate(nightNum, i):
-        # TODO hacky -- assume 1000 visits/night to create an "effective" i
-        i = nightNum * 1000 + i
-        # decide how often to update the display so we can get
-        # a speeding up effect
-        perNight = False
-        deltaI = 0
-        speed1 = 10
-        speed2 = 900
-        cut1 = 1000
-        cut2 = 1500
-        cut3 = 10000
-        cut4 = 50000
-        if 0 <= i < cut1:
-            deltaI = 1
-        if cut1 <= i < cut2:
-            deltaI = int((i - cut1)/(cut2-cut1)*speed1) + 1
-        if cut2 <= i < cut3:
-            deltaI = speed1
-        if cut3 <= i < cut4:
-            deltaI = int((i - cut3)/(cut4-cut3)*speed2) + speed1
-        if cut4 <= i:
-            perNight = True
-
-        return (False, 1)
-        return (perNight, deltaI)
-
-    # TODO use sims_speedObservatory instead
-    def parseDowntime(self, schedFileName="schedDown.conf",
-                            unschedFileName="unschedDown.conf"):
-        def parseSchedFile(filename):
-            downtimeNights = set([])
-            with open(filename) as schedFile:
-                for line in schedFile:
-                    line = line.strip()
-                    if len(line) == 0 or line[0] == "#":
-                        continue
-                    line = line.split("#")[0].strip()
-                    param, value = map(str.strip, line.split("="))
-                    if param == "startNight":
-                        startNight = int(value)
-                    if param == "duration":
-                        # relying on startNight having already been set
-                        duration = int(value)
-                        downtimeNights.update(range(startNight, startNight + duration))
-            return downtimeNights
-
-        schedDownNights = parseSchedFile(schedFileName)
-        unschedDownNights = parseSchedFile(unschedFileName)
-        return schedDownNights | unschedDownNights
+    def time(self):
+        return self.curTime
 
     def run(self, tel):
         self.tel = tel
@@ -146,67 +97,6 @@ class Simulator:
         # the summary plots
         if showSummaryPlots:
             self._outputSummaryStats()
-
-    def _outputSummaryStats(self):
-        """ Displays some example summary statistics
-
-        These have mostly been superceded by MAF, but could potentially
-        be useful still as a quick assessment of a run.
-        """
-
-        avgRevisitTimes = self.skyMap.getAvgRevisitMap()
-        plt.figure("revisit times")
-        plt.title("Average Revisit Times (in minutes)")
-        plt.imshow(avgRevisitTimes/60)
-        plt.colorbar()
-
-        revisitTimesMap = self.skyMap.getRevisitMap()
-        allRevisitTimes = []
-        for pix in revisitTimesMap.flatten():
-            # some entries might be zeros
-            if isinstance(pix, list):
-                allRevisitTimes += pix
-        plt.figure("Revisit Time Histogram")
-        plt.hist(np.array(allRevisitTimes)/3600, 300, cumulative=True, normed=True, range=[0,2])
-        plt.title("Per-Pixel Revisit Times")
-        plt.xlabel("Time (hours)")
-        plt.ylabel("Cumulative number of visits (normalized)")
-
-        plt.figure("% Visits not accompanied by a revisit within 45 minutes (real hrs)")
-        percentLonelyMap = self.skyMap.getLonelinessMap(cutoffMins=45)
-        plt.title("Fraction of visits with no revisit within 45 minutes")
-        plt.imshow(percentLonelyMap)
-        plt.clim(0,0.4)
-        plt.colorbar()
-
-        for percentile in [10, 50, 75, 90, 95, 99]:
-            plt.figure(str(percentile) + "th percentile revisit time")
-            percentileMap = self.skyMap.getPercentileMap(percentile)
-            plt.title(str(percentile) + "th percentile revisit time (in days)")
-            plt.imshow(percentileMap / 3600 / 24)
-            plt.clim(0,7)
-            plt.colorbar()
-
-        plotter = SummaryPlots(self.skyMap, slewTimes = self.slewTimes)
-
-        print "avg slew time", np.mean(self.slewTimes), "seconds"
-        print "median slew time", np.median(self.slewTimes), "seconds"
-        plotter.slewHist()
-        
-        sortedTimes = np.sort(self.slewTimes)
-        cum = np.cumsum(sortedTimes)
-        print "total cumulative slew time: ", cum[-1]
-        print "rank @ half total cum / # slews", np.searchsorted(cum, cum[-1]/2) / len(cum)
-        plotter.slewRankCum()
-        
-        plotter.revisitHist()
-        
-        plotter.dAirmassCum()
-        plotter.dAirmassContour()
-        plotter.zenithAngleContour()
-        plotter.airmassHist()
-
-        plotter.show()
 
     def simulateNight(self, nightNum):
         twilStart = sky.twilStart(Config.surveyStartTime, nightNum)
@@ -344,8 +234,121 @@ class Simulator:
 
         self.sched.notifyNightEnd()
 
-    def time(self):
-        return self.curTime
+
+    def _outputSummaryStats(self):
+        """ Displays some example summary statistics
+
+        These have mostly been superceded by MAF, but could potentially
+        be useful still as a quick assessment of a run.
+        """
+
+        avgRevisitTimes = self.skyMap.getAvgRevisitMap()
+        plt.figure("revisit times")
+        plt.title("Average Revisit Times (in minutes)")
+        plt.imshow(avgRevisitTimes/60)
+        plt.colorbar()
+
+        revisitTimesMap = self.skyMap.getRevisitMap()
+        allRevisitTimes = []
+        for pix in revisitTimesMap.flatten():
+            # some entries might be zeros
+            if isinstance(pix, list):
+                allRevisitTimes += pix
+        plt.figure("Revisit Time Histogram")
+        plt.hist(np.array(allRevisitTimes)/3600, 300, cumulative=True, normed=True, range=[0,2])
+        plt.title("Per-Pixel Revisit Times")
+        plt.xlabel("Time (hours)")
+        plt.ylabel("Cumulative number of visits (normalized)")
+
+        plt.figure("% Visits not accompanied by a revisit within 45 minutes (real hrs)")
+        percentLonelyMap = self.skyMap.getLonelinessMap(cutoffMins=45)
+        plt.title("Fraction of visits with no revisit within 45 minutes")
+        plt.imshow(percentLonelyMap)
+        plt.clim(0,0.4)
+        plt.colorbar()
+
+        for percentile in [10, 50, 75, 90, 95, 99]:
+            plt.figure(str(percentile) + "th percentile revisit time")
+            percentileMap = self.skyMap.getPercentileMap(percentile)
+            plt.title(str(percentile) + "th percentile revisit time (in days)")
+            plt.imshow(percentileMap / 3600 / 24)
+            plt.clim(0,7)
+            plt.colorbar()
+
+        plotter = SummaryPlots(self.skyMap, slewTimes = self.slewTimes)
+
+        print "avg slew time", np.mean(self.slewTimes), "seconds"
+        print "median slew time", np.median(self.slewTimes), "seconds"
+        plotter.slewHist()
+        
+        sortedTimes = np.sort(self.slewTimes)
+        cum = np.cumsum(sortedTimes)
+        print "total cumulative slew time: ", cum[-1]
+        print "rank @ half total cum / # slews", np.searchsorted(cum, cum[-1]/2) / len(cum)
+        plotter.slewRankCum()
+        
+        plotter.revisitHist()
+        
+        plotter.dAirmassCum()
+        plotter.dAirmassContour()
+        plotter.zenithAngleContour()
+        plotter.airmassHist()
+
+        plotter.show()
+
+    @staticmethod
+    def getUpdateRate(nightNum, i):
+        # TODO hacky -- assume 1000 visits/night to create an "effective" i
+        i = nightNum * 1000 + i
+        # decide how often to update the display so we can get
+        # a speeding up effect
+        perNight = False
+        deltaI = 0
+        speed1 = 10
+        speed2 = 900
+        cut1 = 1000
+        cut2 = 1500
+        cut3 = 10000
+        cut4 = 50000
+        if 0 <= i < cut1:
+            deltaI = 1
+        if cut1 <= i < cut2:
+            deltaI = int((i - cut1)/(cut2-cut1)*speed1) + 1
+        if cut2 <= i < cut3:
+            deltaI = speed1
+        if cut3 <= i < cut4:
+            deltaI = int((i - cut3)/(cut4-cut3)*speed2) + speed1
+        if cut4 <= i:
+            perNight = True
+
+        return (False, 1)
+        return (perNight, deltaI)
+
+    # TODO use sims_speedObservatory instead
+    def parseDowntime(self, schedFileName="schedDown.conf",
+                            unschedFileName="unschedDown.conf"):
+        def parseSchedFile(filename):
+            downtimeNights = set([])
+            with open(filename) as schedFile:
+                for line in schedFile:
+                    line = line.strip()
+                    if len(line) == 0 or line[0] == "#":
+                        continue
+                    line = line.split("#")[0].strip()
+                    param, value = map(str.strip, line.split("="))
+                    if param == "startNight":
+                        startNight = int(value)
+                    if param == "duration":
+                        # relying on startNight having already been set
+                        duration = int(value)
+                        downtimeNights.update(range(startNight, startNight + duration))
+            return downtimeNights
+
+        schedDownNights = parseSchedFile(schedFileName)
+        unschedDownNights = parseSchedFile(unschedFileName)
+        return schedDownNights | unschedDownNights
+
+
 
 def runDefaultSim():
     sim = Simulator()
