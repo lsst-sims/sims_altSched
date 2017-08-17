@@ -8,10 +8,18 @@ surveyNumNights = 365 * 10
 # this is january 1 2022 at midnight
 surveyStartTime = 1640995200
 
-# 6.2 degrees should be where the area in the south and east
-# equals the area in the north but apparently not?
+
+# -90 to 11 gets about equal area in the North and Southeast
 maxDec = np.radians(11)
 minDec = np.radians(-90)
+
+# -75 to 15 is minion_1020 (pan-starrs like)
+#maxDec = np.radians(15)
+#minDec = np.radians(-75)
+
+# -62 to 2.5 is minion_1012 (wfd only)
+#maxDec = np.radians(3)
+#minDec = np.radians(-64)
 
 # Approximate width in RA of easterly scans
 # 30 degrees seems reasonable
