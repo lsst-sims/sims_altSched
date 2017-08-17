@@ -23,16 +23,18 @@ from lsst.sims.ocs.environment.cloud_model import CloudModel
 
 from lsst.sims.speedObservatory.utils import unix2mjd
 
-trackMap = False
+trackMap = True
 showDisp = True and trackMap
+graphicsMode = "filters"
 saveMovie = False
 showSummaryPlots = True and trackMap
 clearDisplayNightly = True
 writeCsv = False
 
-assert(not (showDisp and not trackMap))
+resScale = 3
+runName = "9011_4vo_maxf_lax_3set_97"
 
-surveyYears = 10
+assert(not (showDisp and not trackMap))
 
 class Simulator:
     def __init__(self):
@@ -66,6 +68,7 @@ class Simulator:
         return (False, 1)
         return (perNight, deltaI)
 
+    # TODO use sims_speedObservatory instead
     def parseDowntime(self, schedFileName="schedDown.conf",
                             unschedFileName="unschedDown.conf"):
         def parseSchedFile(filename):
@@ -108,15 +111,15 @@ class Simulator:
 
         # resScale is proportional to the resolution (and therefore the speed)
         if trackMap:
-            self.skyMap = SkyMap(telescope=self.tel, resScale=6)
+            self.skyMap = SkyMap(telescope=self.tel, resScale=resScale)
         if showDisp:
-            self.display = GraphicalMonitor(skyMap=self.skyMap, mode="nvisits")
+            self.display = GraphicalMonitor(skyMap=self.skyMap, mode=graphicsMode)
        
         self.slewTimes = []
 
         # write the header to the output file if writeCsv flag is set
         if writeCsv:
-            self.outFile = open("results/dd_4vo_maxf_lax_3set_105/dd_4vo_maxf_lax_3set_105.csv", "w")
+            self.outFile = open("results/" + runName + "/" + runName + ".csv", "w")
             self.outFile.write("time,prop,ra,dec,filter\n")
 
         # run the survey!
@@ -141,18 +144,22 @@ class Simulator:
 
         # we're done with the simulation now unless we have to show
         # the summary plots
-        if not showSummaryPlots:
-            return
+        if showSummaryPlots:
+            self._outputSummaryStats()
 
+    def _outputSummaryStats(self):
+        """ Displays some example summary statistics
+
+        These have mostly been superceded by MAF, but could potentially
+        be useful still as a quick assessment of a run.
         """
+
         avgRevisitTimes = self.skyMap.getAvgRevisitMap()
         plt.figure("revisit times")
         plt.title("Average Revisit Times (in minutes)")
         plt.imshow(avgRevisitTimes/60)
         plt.colorbar()
-        """
 
-        """
         revisitTimesMap = self.skyMap.getRevisitMap()
         allRevisitTimes = []
         for pix in revisitTimesMap.flatten():
@@ -164,7 +171,6 @@ class Simulator:
         plt.title("Per-Pixel Revisit Times")
         plt.xlabel("Time (hours)")
         plt.ylabel("Cumulative number of visits (normalized)")
-        """
 
         plt.figure("% Visits not accompanied by a revisit within 45 minutes (real hrs)")
         percentLonelyMap = self.skyMap.getLonelinessMap(cutoffMins=45)
@@ -173,7 +179,6 @@ class Simulator:
         plt.clim(0,0.4)
         plt.colorbar()
 
-        """
         for percentile in [10, 50, 75, 90, 95, 99]:
             plt.figure(str(percentile) + "th percentile revisit time")
             percentileMap = self.skyMap.getPercentileMap(percentile)
@@ -181,28 +186,25 @@ class Simulator:
             plt.imshow(percentileMap / 3600 / 24)
             plt.clim(0,7)
             plt.colorbar()
-        """
-
 
         plotter = SummaryPlots(self.skyMap, slewTimes = self.slewTimes)
 
         print "avg slew time", np.mean(self.slewTimes), "seconds"
         print "median slew time", np.median(self.slewTimes), "seconds"
-        #plotter.slewHist()
+        plotter.slewHist()
         
-        #sortedTimes = np.sort(self.slewTimes)
-        #cum = np.cumsum(sortedTimes)
-        #print "total cumulative slew time: ", cum[-1]
-        #print "rank @ half total cum / # slews", np.searchsorted(cum, cum[-1]/2) / len(cum)
-        #plotter.slewRankCum()
+        sortedTimes = np.sort(self.slewTimes)
+        cum = np.cumsum(sortedTimes)
+        print "total cumulative slew time: ", cum[-1]
+        print "rank @ half total cum / # slews", np.searchsorted(cum, cum[-1]/2) / len(cum)
+        plotter.slewRankCum()
         
-        print "avg revisit time", np.mean(np.array(self.revisitTimes)/60), "minutes"
-        #plotter.revisitHist()
+        plotter.revisitHist()
         
         plotter.dAirmassCum()
-        #plotter.dAirmassContour()
+        plotter.dAirmassContour()
         plotter.zenithAngleContour()
-        #plotter.airmassHist()
+        plotter.airmassHist()
 
         plotter.show()
 
@@ -231,7 +233,6 @@ class Simulator:
                 self.curTime += 600
                 deltaT = self.curTime - Config.surveyStartTime
                 cloudCover = self.cloudModel.get_cloud(deltaT)
-                #cloudCover = 1 if twilStart + 3600 < self.curTime < twilStart + 3600*4 else 0
 
                 # above code makes simulator wait until not cloudy
                 #self.sched.notifyNightEnd()
