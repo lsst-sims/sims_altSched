@@ -226,14 +226,28 @@ class Simulator:
             # skip forward in time if there are clouds
             deltaT = self.curTime - Config.surveyStartTime
             cloudCover = self.cloudModel.get_cloud(deltaT)
+            timeBeforeDomeClose = self.curTime
             while cloudCover > Config.maxCloudCover and self.curTime <= twilEnd:
                 self.curTime += 600
                 deltaT = self.curTime - Config.surveyStartTime
                 cloudCover = self.cloudModel.get_cloud(deltaT)
+                #cloudCover = 1 if twilStart + 3600 < self.curTime < twilStart + 3600*4 else 0
 
                 # above code makes simulator wait until not cloudy
-                self.sched.notifyNightEnd()
-                return # skip the rest of the night
+                #self.sched.notifyNightEnd()
+                #return # skip the rest of the night
+
+            # the night might have ended while it was cloudy
+            if self.curTime >= twilEnd:
+                break
+
+            # if the dome closed due to clouds, get a fresh visit from the
+            # scheduler by continuing
+            if self.curTime > timeBeforeDomeClose:
+                # let sched know that the dome closed for a while
+                self.sched.notifyDomeClosed(self.curTime - timeBeforeDomeClose)
+                # continue to get a new visit that isn't stale
+                continue
 
             # if visit is None, that means the scheduler has nowhere to point
             # at the moment

@@ -54,6 +54,10 @@ class Scheduler:
         self.NVisitsComplete = 0
         self.EVisitsComplete = 0
 
+        # flag that is raised when the dome was just closed
+        self.wasDomeJustClosed = False
+        self.domeClosedDuration = 0
+
         # read in DD field centers
         self.ddFieldCenters = []
         with open("ddFields.csv", "r") as ddFile:
@@ -121,6 +125,16 @@ class Scheduler:
             prevTime = time
             yield visit
 
+    def _expectedVisitTime(self, nightDirection):
+        if nightDirection == NORTH:
+            t = self.NEstAvgSlewTime
+        elif nightDirection == SOUTHEAST:
+            t = self.SEEstAvgSlewTime
+        else:
+            raise ValueError("Invalid direction passed to _expectedVisitTime")
+        t += self.estAvgExpTime + Config.visitOverheadTime
+        return t
+
     # TODO confusing why we have scheduleNight() and _scheduleNight()
     def _scheduleNight(self, nightNum):
         # this will hold the VPs in tonight's mini survey
@@ -186,11 +200,7 @@ class Scheduler:
         # the period of exposure taking is the sum of the exposure time,
         # the visit overhead time (shutter/intermediate readout),
         # and the slew time
-        if self.nightDirection == NORTH:
-            t = self.NEstAvgSlewTime
-        elif self.nightDirection == SOUTHEAST:
-            t = self.SEEstAvgSlewTime
-        t += self.estAvgExpTime + Config.visitOverheadTime
+        t = self._expectedVisitTime(self.nightDirection)
         if self.DDVisit is None:
             # we won't do a DD visit tonight
             expectedNumVisits = int(nightLength / t)
@@ -501,13 +511,21 @@ class Scheduler:
             assert(len(SScans) == 0)
 
         # now schedule each revisit group
-        for rg in revisitGroups:
+        rgIdx = 0
+        # this is used in case the dome closes during a revisitgroup to track
+        # how much observing time we would have accomplished during the rest
+        # of that revisitgroup
+        numVisitsKilled = 0
+        while rgIdx < len(revisitGroups):
+            rg = revisitGroups[rgIdx]
+            rgIdx += 1
             # perform scan1 and scan2 twice in a row but use
             # potentially-different filters the second time through
-            for scan, scanDir, filt in [(rg["scan1"], rg["scanDir1"], rg["filter1"]),
-                                        (rg["scan2"], rg["scanDir2"], rg["filter2"]),
-                                        (rg["scan1"], rg["scanDir1"], rg["filter3"]),
-                                        (rg["scan2"], rg["scanDir2"], rg["filter4"])]:
+            for i, scan, scanDir, filt in [
+                    (0, rg["scan1"], rg["scanDir1"], rg["filter1"]),
+                    (1, rg["scan2"], rg["scanDir2"], rg["filter2"]),
+                    (2, rg["scan1"], rg["scanDir1"], rg["filter3"]),
+                    (3, rg["scan2"], rg["scanDir2"], rg["filter4"])]:
                 if scanDir == NORTH:
                     sortedScan = sorted(scan, key=lambda v: v.dec)
                 elif scanDir == SOUTH:
@@ -524,7 +542,44 @@ class Scheduler:
                     raise RuntimeError("invalid direction " + str(scanDir))
 
                 for visit in self._schedulePath(sortedScan, nightNum, filt):
+                    # _schedulPath returns before yielding a stale visit
+                    # due to a closed dome. So if it returns a visit, we
+                    # know the dome wasn't just closed
                     yield visit
+
+                if self.wasDomeJustClosed:
+                    # kill the rest of this revisit group if the dome was just
+                    # closed
+                    # TODO doesn't consider time killed in the current scan
+                    if i == 0:
+                        numVisitsKilled += len(rg["scan1"]) + 2 * len(rg["scan2"])
+                    elif i == 1:
+                        numVisitsKilled += len(rg["scan1"]) + len(rg["scan2"])
+                    elif i == 2:
+                        numVisitsKilled += len(rg["scan2"])
+
+                    break
+
+            if self.wasDomeJustClosed:
+                avgVisitTime = self._expectedVisitTime(self.nightDirection)
+                timeKilled = 0
+                while rgIdx < len(revisitGroups) - 1:
+                    rg = revisitGroups[rgIdx]
+                    numVisitsKilled += (len(rg["scan1"]) + len(rg["scan2"])) * 2
+
+                    # decide whether or not to kill one more revisitgroup
+                    stopNow = np.abs(timeKilled - self.domeClosedDuration)
+                    oneMore = np.abs(numVisitsKilled * avgVisitTime -
+                                     self.domeClosedDuration)
+                    if stopNow < oneMore:
+                        break
+                    else:
+                        timeKilled = numVisitsKilled * avgVisitTime
+                        rgIdx += 1
+
+                # we finished handling the dome closed interrupt, so lower the
+                # flag
+                self.wasDomeJustClosed = False
 
             # figure out whether we need to add a DD field between
             # revisitGroups. If self.DDVisit is None, we've
@@ -549,15 +604,11 @@ class Scheduler:
     def _schedulePath(self, path, nightNum, filt):
         for visitPair in path:
 
-            """
-            # check time to see if we're too ahead or behind schedule
-            curTime = self.context.time()
-            if abs(curTime - expectedNextVisitTime) > #TODO:
-
-            # check clouds to see if we need to adjust
-            areCloudsAround = self.context.areCloudsAround()
-            cloudMap = self.context.getCloudMap()
-            """
+            # check time to see if the dome closed since the last
+            # visit. If so, the rest of this path is stale
+            # TODO "path" is too generic since a path could be arbitrarily long
+            if self.wasDomeJustClosed:
+                return
 
             if visitPair.visit1.isComplete and visitPair.visit2.isComplete:
                 # we need this check since a visitPair can be pending
@@ -635,6 +686,10 @@ class Scheduler:
         self.tonightsMini = None
         filtersequence.maxFChangesNightOver(self.nightDirection)
 
+    def notifyDomeClosed(self, timeClosed):
+        # wasDomeJustClosed is an interrupt flag for (_)scheduleNight
+        self.wasDomeJustClosed = True
+        self.domeClosedDuration = timeClosed
 
     def _scheduleRestOfNight(self):
         # TODO questionable function but might need in case of clouds?
