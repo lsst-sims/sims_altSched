@@ -113,7 +113,6 @@ class Simulator:
             self.display = GraphicalMonitor(skyMap=self.skyMap, mode="nvisits")
        
         self.slewTimes = []
-        self.revisitTimes = []
 
         # write the header to the output file if writeCsv flag is set
         if writeCsv:
@@ -121,6 +120,8 @@ class Simulator:
             self.outFile.write("time,prop,ra,dec,filter\n")
 
         # run the survey!
+        self.fieldsRisingWasteTime = 0
+        self.earlyNightEndWasteTime = 0
         for nightNum in range(Config.surveyNumNights):
             print "Night:", nightNum, "\r",
             sys.stdout.flush()
@@ -133,6 +134,8 @@ class Simulator:
             if showDisp and clearDisplayNightly:
                 self.skyMap.clear()
 
+        print "time wasted waiting for fields to rise:", self.fieldsRisingWasteTime
+        print "time wasted when sched ran out of visits:", self.earlyNightEndWasteTime
         if writeCsv:
             self.outFile.close()
 
@@ -236,6 +239,7 @@ class Simulator:
             # at the moment
             if visit is None:
                 self.curTime += 30
+                self.fieldsRisingWasteTime += 30
             else:
                 alt, az = sky.radec2altaz(visit.ra, visit.dec, self.time())
                 # make sure this az is a valid place to look
@@ -316,6 +320,13 @@ class Simulator:
             # process the end of the night if necessary
             if self.curTime > twilEnd:
                 break
+
+        self.earlyNightEndWasteTime += twilEnd - self.curTime
+        if showDisp:
+            while self.curTime < twilEnd:
+                self.display.updateDisplay(self.skyMap, self.curTime)
+                self.curTime += 30
+
         self.sched.notifyNightEnd()
 
     def time(self):
