@@ -56,6 +56,10 @@ WFDExpTime = 30
 # (shutter and potentially intermediate readout times)
 visitOverheadTime = 4
 
+# whether to use the "relaxed" dome model in the sims.speedObservatory
+# telescope model
+laxDome = False
+
 NORTH = 0
 SOUTH = 1
 EAST = 2
