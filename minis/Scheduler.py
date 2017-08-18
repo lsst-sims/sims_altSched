@@ -117,7 +117,7 @@ class Scheduler:
                 # Don't change laxDome param without changing in Simulator too
                 slewTime = self.telescope.calcSlewTime(prevAlt, prevAz, prevFilter,
                                                        alt, az, visit.filter,
-                                                       laxDome = True)
+                                                       laxDome = Config.laxDome)
                 self.curNightSlewTimes.append(slewTime)
             prevAlt = alt
             prevAz = az
