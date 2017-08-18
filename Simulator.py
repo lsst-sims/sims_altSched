@@ -53,6 +53,7 @@ class Simulator:
         self.sched = Scheduler(telescope=self.tel, context=self)
 
         # make a TimeHandler to give to the CloudModel
+        # TODO use sims_speedObservatory instead
         dateFormat = "%Y-%m-%d"
         startDatetime = datetime.utcfromtimestamp(Config.surveyStartTime)
         timeHandler = TimeHandler(datetime.strftime(startDatetime, dateFormat))
@@ -65,7 +66,8 @@ class Simulator:
             self.skyMap = SkyMap(telescope=self.tel, resScale=resScale)
         if showDisp:
             self.display = GraphicalMonitor(skyMap=self.skyMap, mode=graphicsMode)
-       
+
+        # track slew times for simplest summary statistics
         self.slewTimes = []
 
         # write the header to the output file if writeCsv flag is set
@@ -74,6 +76,7 @@ class Simulator:
             self.outFile.write("time,prop,ra,dec,filter\n")
 
         # run the survey!
+        # these variables keep track of wasted time
         self.fieldsRisingWasteTime = 0
         self.earlyNightEndWasteTime = 0
         for nightNum in range(Config.surveyNumNights):
@@ -81,20 +84,17 @@ class Simulator:
             sys.stdout.flush()
             if nightNum in downtimeNights:
                 continue
-            self.simulateNight(nightNum)
 
-            # the clearDisplayNightly flag indicates we should clear
-            # the skymap at the end of each night
-            if showDisp and clearDisplayNightly:
-                self.skyMap.clear()
+            self.simulateNight(nightNum)
+            self.sched.notifyNightEnd()
 
         print "time wasted waiting for fields to rise:", self.fieldsRisingWasteTime
         print "time wasted when sched ran out of visits:", self.earlyNightEndWasteTime
         if writeCsv:
             self.outFile.close()
 
-        # we're done with the simulation now unless we have to show
-        # the summary plots
+        # we're done with the simulation now
+        # show summary plots if requested
         if showSummaryPlots:
             self._outputSummaryStats()
 
@@ -109,11 +109,14 @@ class Simulator:
         prevI = 0
 
         # prevFilter is the filter of the last visit
-        prevFilter = ''
-        prevAlt = -1
-        prevAz = -1
+        (prevFilter, prevAlt, prevAz) = ('', -1, -1)
+        wasDomeJustClosed = False
         for i, visit in enumerate(self.sched.scheduleNight(nightNum)):
             perNight, deltaI = self.getUpdateRate(nightNum, i)
+
+            # stop if the night is over
+            if self.curTime >= twilEnd:
+                break
 
             # skip forward in time if there are clouds
             deltaT = self.curTime - Config.surveyStartTime
@@ -124,19 +127,12 @@ class Simulator:
                 deltaT = self.curTime - Config.surveyStartTime
                 cloudCover = self.cloudModel.get_cloud(deltaT)
 
-                # above code makes simulator wait until not cloudy
-                #self.sched.notifyNightEnd()
-                #return # skip the rest of the night
-
-            # the night might have ended while it was cloudy
-            if self.curTime >= twilEnd:
-                break
-
             # if the dome closed due to clouds, get a fresh visit from the
             # scheduler by continuing
             if self.curTime > timeBeforeDomeClose:
                 # let sched know that the dome closed for a while
                 self.sched.notifyDomeClosed(self.curTime - timeBeforeDomeClose)
+                wasDomeJustClosed = True
                 # continue to get a new visit that isn't stale
                 continue
 
@@ -146,94 +142,73 @@ class Simulator:
                 self.curTime += 30
                 self.fieldsRisingWasteTime += 30
             else:
-                alt, az = sky.radec2altaz(visit.ra, visit.dec, self.time())
+                alt, az = sky.radec2altaz(visit.ra, visit.dec, self.curTime)
                 # make sure this az is a valid place to look
-                if alt < 0:
-                    errorMsg = "Can't look at the ground! visit = %s " + \
-                               "on nightNum %d at time %f. alt/az = %f / %f. " + \
-                               "Previous alt/az = %f / %f. NightStart = %f"
-                    args = (visit, nightNum, self.curTime, alt, az,
-                            prevAlt, prevAz, twilStart)
-                    print errorMsg % args
-                    #raise RuntimeError(errorMsg % args)
-                    # don't execute this visit
-                    continue
-                if alt > self.tel.maxAlt:
-                    errormsg = "Warning: tried to observe in zenith avoid zone "
-                    errormsg += "(visit, nightNum, curTime, alt, az, prevAlt, "
-                    errormsg += "prevAz, twilStart)="
-                    errormsg += ",".join(map(str, (visit, nightNum, self.curTime,
-                                                   alt, az, prevAlt, prevAz,
-                                                   twilStart)))
-                    print errormsg
-                    #raise RuntimeError(errormsg)
-                    # don't execute this visit
+                if alt < self.tel.minAlt or alt > self.tel.maxAlt:
+                    print "invalid alt (", np.degrees(alt), "deg) night", nightNum
                     continue
 
                 # figure out how far we have to slew
-                if i > 0:
-                    # Don't change laxDome param without changing in
-                    # Simulator too
+                if i > 0 and not wasDomeJustClosed:
                     slewTime = self.tel.calcSlewTime(prevAlt, prevAz, prevFilter,
                                                      alt, az, visit.filter,
-                                                     laxDome = True)
-
-                if i > 0:
-                    # TODO will need to avoid adding slew time
-                    # once we reopen after clouds
+                                                     laxDome = Config.laxDome)
                     self.curTime += slewTime
                     self.slewTimes.append(slewTime)
 
                 # notify the skyMap of the visit
-                # (the time of the visit is the time after the slew but
-                # before the exposure)
+                # (the time of the visit is the time after the slew is over)
                 if trackMap:
                     self.skyMap.addVisit(visit, self.curTime)
 
-
-                expTime = visit.expTime
                 if writeCsv:
                     assert(visit.prop == PROP_WFD or visit.prop == PROP_DD)
                     prop = "wfd" if visit.prop == PROP_WFD else "dd"
-                    self.outFile.write(str(unix2mjd(self.time())) + "," +
+                    self.outFile.write(str(unix2mjd(self.curTime)) + "," +
                                        prop + "," +
                                        str(visit.ra) + "," +
                                        str(visit.dec) + "," +
                                        visit.filter + "\n")
 
                 # add the exposure time of this visit to the current time
-                self.curTime += expTime
+                self.curTime += visit.expTime
                 self.curTime += Config.visitOverheadTime
 
                 # let the scheduler know we "carried out" this visit
-                self.sched.notifyVisitComplete(visit, self.time())
+                self.sched.notifyVisitComplete(visit, self.curTime)
 
-                prevAlt = alt
-                prevAz = az
-                prevFilter = visit.filter
+                (prevAlt, prevAz, prevFilter) = (alt, az, visit.filter)
 
+            wasDomeJustClosed = False
 
             # now that we've added the visit (if there was one),
             # update the display
-            if showDisp and ((    perNight and i == 0) or
-                             (not perNight and i - prevI >= deltaI)):
+            if showDisp and not perNight and i - prevI >= deltaI:
                 self.display.updateDisplay(self.skyMap, self.curTime)
                 prevI = i
                 # save each frame if the saveMovie flag is set
                 if saveMovie:
                     self.display.saveFrame("images/pygame/%07d.png" % i)
-            # process the end of the night if necessary
-            if self.curTime > twilEnd:
-                break
 
+        # the night is over
+
+        # calculate how much time we waste at the end of the night
         self.earlyNightEndWasteTime += twilEnd - self.curTime
-        if showDisp:
+        # show the sky scroll by during the wasted time
+        if showDisp and not perNight:
             while self.curTime < twilEnd:
                 self.display.updateDisplay(self.skyMap, self.curTime)
                 self.curTime += 30
 
-        self.sched.notifyNightEnd()
+        # update the display with the completed night if perNight is true
+        if showDisp and perNight:
+            self.display.updateDisplay(self.skyMap, self.curTime)
+            if saveMovie:
+                self.display.saveFrame("images/pygame/%07d.png" % i)
 
+        # clear the skyMap so the next updateDisplay won't have tonight's visits
+        if showDisp and clearDisplayNightly:
+            self.skyMap.clear()
 
     def _outputSummaryStats(self):
         """ Displays some example summary statistics
@@ -298,6 +273,9 @@ class Simulator:
 
     @staticmethod
     def getUpdateRate(nightNum, i):
+        # returning (False, 1) makes the display just show every visit
+        return (False, 1)
+
         # TODO hacky -- assume 1000 visits/night to create an "effective" i
         i = nightNum * 1000 + i
         # decide how often to update the display so we can get
@@ -321,7 +299,6 @@ class Simulator:
         if cut4 <= i:
             perNight = True
 
-        return (False, 1)
         return (perNight, deltaI)
 
     # TODO use sims_speedObservatory instead
