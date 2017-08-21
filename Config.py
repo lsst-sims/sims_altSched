@@ -46,6 +46,9 @@ moonUMaxPhase = 0.3
 moonGMaxAlt = np.radians(20)
 moonGMaxPhase = 0.6
 
+# whether or not to include deep drilling fields
+useDD = False
+
 # number of seconds of exposure time for DD visits
 DDExpTime = 60 * 60
 

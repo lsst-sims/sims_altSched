@@ -5,6 +5,9 @@ from astropy.time import Time
 import multiprocessing as mp
 from multiprocessing import Pool
 import itertools
+from lsst.sims.speedObservatory import Telescope
+import Config
+from Config import NORTH, SOUTH, EAST, SOUTHEAST
 
 def areRasInRange(ras, (minRa, maxRa)):
     if minRa < maxRa:
@@ -17,6 +20,37 @@ def isRaInRange(ra, (minRa, maxRa)):
         return minRa < ra and ra < maxRa
     else:
         return minRa < ra or  ra < maxRa
+
+def directionOfDec(dec):
+    if dec > Config.maxDec or dec < Config.minDec:
+        raise ValueError("Provided dec of " + str(dec) + " is outside " + \
+                         "of the survey area.")
+    if dec > Telescope.latitude + Config.zenithBuffer:
+        return NORTH
+    elif dec > Telescope.latitude - Config.zenithBuffer:
+        return EAST
+    else:
+        return SOUTH
+
+def areaInDir(direction):
+    buf = Config.zenithBuffer
+    # int_{dec1}^{dec2} 2\pi r dr, where r=\cos\theta
+    # = 2\pi (\sin(dec2) - \sin(dec1))
+    if direction == NORTH:
+        return 2*np.pi*(np.sin(Config.maxDec) -
+                        np.sin(Telescope.latitude + buf))
+
+    elif direction == SOUTH:
+        return 2*np.pi*(np.sin(Telescope.latitude - buf) -
+                        np.sin(Config.minDec))
+    elif direction == EAST:
+        return 2*np.pi*(np.sin(Telescope.latitude + buf) -
+                        np.sin(Telescope.latitude - buf))
+
+    elif direction == SOUTHEAST:
+        return areaInDir(SOUTH) + areaInDir(EAST)
+    else:
+        raise ValueError("Invalid direction " + str(direction))
 
 # I could use one of astropy's implementation of this
 # but one of them is 10x slower than this and the 
