@@ -12,6 +12,7 @@ from lsst.sims.speedObservatory import Telescope
 from SkyMap import SkyMap
 import time
 import sys
+import os
 from multiprocessing import Pool
 from datetime import datetime
 
@@ -331,6 +332,8 @@ def runDefaultSim():
     sim = Simulator()
     # use a telescope with default parameters
     tel = Telescope()
+    if not os.path.isdir("results/" + runName):
+        os.mkdir("results/" + runName)
     return sim.run(tel)
 
 if __name__ == "__main__":
