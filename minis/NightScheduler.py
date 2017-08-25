@@ -172,7 +172,7 @@ class NightScheduler:
                     break
 
             if self.wasDomeJustClosed:
-                avgVisitTime = self._expectedVisitTime(self.direction)
+                avgVisitTime = self._expectedVisitTime()
                 timeKilled = 0
                 while rgIdx < len(revisitGroups) - 1:
                     rg = revisitGroups[rgIdx]
