@@ -9,7 +9,7 @@ from lsst.sims.speedObservatory import Telescope
 from Visit import Visit
 from Visit import VisitPair
 import Utils
-from NightScheduler import NightScheduler
+from minis.NightScheduler import NightScheduler
 
 from matplotlib import pyplot as plt
 import copy

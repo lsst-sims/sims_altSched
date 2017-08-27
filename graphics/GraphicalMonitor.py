@@ -132,5 +132,4 @@ class GraphicalMonitor:
 
     def saveFrame(self, filename):
         # save the current frame to disk
-	pygame.image.save(self.screen, filename)
-
+        pygame.image.save(self.screen, filename)

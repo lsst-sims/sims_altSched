@@ -1,4 +1,4 @@
-import Scheduler
+from minis import Scheduler
 from lsst.sims.speedObservatory import Telescope
 from lsst.sims.speedObservatory import sky
 from Config import NORTH, SOUTHEAST

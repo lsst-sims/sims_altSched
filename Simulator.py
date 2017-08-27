@@ -1,4 +1,5 @@
 from __future__ import division
+from __future__ import print_function
 
 from graphics.GraphicalMonitor import GraphicalMonitor
 #from graphics.GraphicalMonitor3D import GraphicalMonitor3D
@@ -81,7 +82,7 @@ class Simulator:
         self.fieldsRisingWasteTime = 0
         self.earlyNightEndWasteTime = 0
         for nightNum in range(Config.surveyNumNights):
-            print "Night:", nightNum, "\r",
+            print("Night:", nightNum, end="\r")
             sys.stdout.flush()
             if nightNum in downtimeNights:
                 continue
@@ -89,8 +90,8 @@ class Simulator:
             self.simulateNight(nightNum)
             self.sched.notifyNightEnd()
 
-        print "time wasted waiting for fields to rise:", self.fieldsRisingWasteTime
-        print "time wasted when sched ran out of visits:", self.earlyNightEndWasteTime
+        print("time wasted waiting for fields to rise:", self.fieldsRisingWasteTime)
+        print("time wasted when sched ran out of visits:", self.earlyNightEndWasteTime)
         if writeCsv:
             self.outFile.close()
 
@@ -146,7 +147,7 @@ class Simulator:
                 alt, az = sky.radec2altaz(visit.ra, visit.dec, self.curTime)
                 # make sure this az is a valid place to look
                 if alt < self.tel.minAlt or alt > self.tel.maxAlt:
-                    print "invalid alt (", np.degrees(alt), "deg) night", nightNum
+                    print("invalid alt (", np.degrees(alt), "deg) night", nightNum)
                     continue
 
                 # figure out how far we have to slew
@@ -253,14 +254,14 @@ class Simulator:
 
         plotter = SummaryPlots(self.skyMap, slewTimes = self.slewTimes)
 
-        print "avg slew time", np.mean(self.slewTimes), "seconds"
-        print "median slew time", np.median(self.slewTimes), "seconds"
+        print("avg slew time", np.mean(self.slewTimes), "seconds")
+        print("median slew time", np.median(self.slewTimes), "seconds")
         plotter.slewHist()
         
         sortedTimes = np.sort(self.slewTimes)
         cum = np.cumsum(sortedTimes)
-        print "total cumulative slew time: ", cum[-1]
-        print "rank @ half total cum / # slews", np.searchsorted(cum, cum[-1]/2) / len(cum)
+        print("total cumulative slew time: ", cum[-1])
+        print("rank @ half total cum / # slews", np.searchsorted(cum, cum[-1]/2) / len(cum))
         plotter.slewRankCum()
         
         plotter.revisitHist()

@@ -280,7 +280,7 @@ class SkyMap:
             
         # keep track of where in vals the start of the current row is
         rowStartProjPixId = 0
-        for y in xrange(self.yMin, self.yMax):
+        for y in range(self.yMin, self.yMax):
             # y is the y coordinate in the image (so yMax is the top row)
 
             # iy is the y index into valMap (so 0 is the top row)

@@ -1,4 +1,5 @@
 from __future__ import division
+from __future__ import print_function
 
 from matplotlib import pyplot as plt
 from lsst.sims.speedObservatory import Telescope
@@ -14,7 +15,7 @@ log.setLevel(logging.DEBUG)
 
 class SummaryPlots:
     def __init__(self, skyMap, slewTimes=None):
-        print
+        print()
         log.debug("start __init__")
 
         self.skyMap = skyMap

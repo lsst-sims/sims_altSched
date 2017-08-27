@@ -1,12 +1,13 @@
 from __future__ import division
+from __future__ import print_function
 
 from Config import NORTH, SOUTH, EAST, WEST, SOUTHEAST
 import Config
 import Utils
-from MiniSurvey import MiniSurvey
+from minis.MiniSurvey import MiniSurvey
 from Visit import Visit
 from Visit import PROP_WFD, PROP_DD
-import filtersequence
+from minis import filtersequence
 
 from lsst.sims.speedObservatory import sky
 
@@ -337,7 +338,7 @@ class NightScheduler:
         # enough pending visits left
 
         (raStart, raEnd) = self._getTonightsRaRange()
-        #print "new mini on night", nightNum, "with ra: (", raStart, ",", raEnd, ")"
+        #print("new mini on night", nightNum, "with ra: (", raStart, ",", raEnd, ")")
 
         newVisitPairs = MiniSurvey.newMiniSurvey(self.telescope, raStart,
                                                  raEnd, direction)
@@ -407,7 +408,7 @@ class NightScheduler:
                 if v.dec < self.telescope.latitude:
                     scanId += 1
                 if scanId > len(scans):
-                    print scanId, ERaMin, ERaMax, v.ra, v.dec
+                    print(scanId, ERaMin, ERaMax, v.ra, v.dec)
                 scans[scanId].add(v)
             return scans
 
@@ -597,11 +598,11 @@ class NightScheduler:
         for i, ras in enumerate(EScansRas):
             if len(ras) == 0:
                 # TODO
-                #print "len(ras)=0 :(. nightNum =", nightNum
-                #print "nightLen", sky.nightLength(Config.surveyStartTime, nightNum) / 3600
-                #print "EScans len", [len(scan) for scan in EScans]
-                #print "SScans len", [len(scan) for scan in SScans]
-                #print "avgVisitTime", self.estAvgExpTime + self.SEEstAvgSlewTime
+                #print("len(ras)=0 :(. nightNum =", nightNum)
+                #print("nightLen", sky.nightLength(Config.surveyStartTime, nightNum) / 3600)
+                #print("EScans len", [len(scan) for scan in EScans])
+                #print("SScans len", [len(scan) for scan in SScans])
+                #print("avgVisitTime", self.estAvgExpTime + self.SEEstAvgSlewTime)
                 #raise RuntimeError("ras len 0, i=%d" % i)
 
                 # this will cause this scan to be scheduled ASAP
@@ -626,7 +627,7 @@ class NightScheduler:
 
         avgVisitTime = (Config.WFDExpTime + _estAvgSlewTimes[SOUTHEAST] +
                         Config.visitOverheadTime)
-        EScanTimes = np.array(map(len, EScans)) * avgVisitTime
+        EScanTimes = np.array(list(map(len, EScans))) * avgVisitTime
 
         # this is the time available between when we start a pair of East
         # scans and when we have to be done with those scans. It is NOT
@@ -638,18 +639,18 @@ class NightScheduler:
         execTimes = 2 * EScanTimes[::2] + EScanTimes[1::2]
 
         def printDebug():
-            print "nightNum", self.nightNum
-            print "numECols", numECols
-            print "EMinGroupRa", EMinGroupRa
-            print "raOfZenith", raOfZenith
-            print "cutoffRa", cutoffRa
-            print "timesLeft", timesLeft, timesLeft / 3600
-            print "avgVisitTime", avgVisitTime
-            print "EScanTimes", EScanTimes, EScanTimes / 3600, np.cumsum(EScanTimes/3600)
-            print "execTimes", execTimes
+            print("nightNum", self.nightNum)
+            print("numECols", numECols)
+            print("EMinGroupRa", EMinGroupRa)
+            print("raOfZenith", raOfZenith)
+            print("cutoffRa", cutoffRa)
+            print("timesLeft", timesLeft, timesLeft / 3600)
+            print("avgVisitTime", avgVisitTime)
+            print("EScanTimes", EScanTimes, EScanTimes / 3600, np.cumsum(EScanTimes/3600))
+            print("execTimes", execTimes)
             SScanTimes = np.array(map(len, SScans)) * avgVisitTime
-            print "SScanTimes", SScanTimes, SScanTimes / 3600, np.cumsum(SScanTimes/3600)
-
+            print("SScanTimes", SScanTimes, SScanTimes / 3600, np.cumsum(SScanTimes/3600)
+)
         # now combine the South and East scans together in a good order
         # into the scans, filters, and scanDirs arrays
 

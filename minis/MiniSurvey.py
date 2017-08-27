@@ -3,7 +3,7 @@ import numpy as  np
 from lsst.sims.speedObservatory import Telescope
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from RotationGenerator import RotationGenerator
+from minis.RotationGenerator import RotationGenerator
 from Visit import VisitPair
 import Config
 import Utils

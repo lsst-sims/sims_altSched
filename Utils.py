@@ -9,13 +9,15 @@ from lsst.sims.speedObservatory import Telescope
 import Config
 from Config import NORTH, SOUTH, EAST, SOUTHEAST
 
-def areRasInRange(ras, (minRa, maxRa)):
+def areRasInRange(ras, raRange):
+    minRa, maxRa = raRange
     if minRa < maxRa:
         return (minRa < ras) & (ras < maxRa)
     else:
         return (minRa < ras) | (ras < maxRa)
 
-def isRaInRange(ra, (minRa, maxRa)):
+def isRaInRange(ra, raRange):
+    minRa, maxRa = raRange
     if minRa < maxRa:
         return minRa < ra and ra < maxRa
     else:
