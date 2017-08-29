@@ -158,6 +158,10 @@ class Simulator:
                     self.curTime += slewTime
                     self.slewTimes.append(slewTime)
 
+                if(self.curTime + visit.expTime +
+                        Config.visitOverheadTime > twilEnd):
+                    break
+
                 # notify the skyMap of the visit
                 # (the time of the visit is the time after the slew is over)
                 if trackMap:
@@ -195,7 +199,8 @@ class Simulator:
         # the night is over
 
         # calculate how much time we waste at the end of the night
-        self.earlyNightEndWasteTime += twilEnd - self.curTime
+        # curTime could be > twilEnd if we added 600 sec for clouds
+        self.earlyNightEndWasteTime += max(twilEnd - self.curTime, 0)
         # show the sky scroll by during the wasted time
         if showDisp and not perNight:
             while self.curTime < twilEnd:

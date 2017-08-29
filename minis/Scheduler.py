@@ -127,7 +127,9 @@ class Scheduler:
                                    " is in unknown direction")
 
     def notifyNightEnd(self):
-        if len(self.tonightsSlewTimes) == 0:
+        # TODO sometimes a night has only one slew that's a filter change slew time
+        # which screws up the average slew time calculation
+        if len(self.tonightsSlewTimes) < 2:
             return
         avgSlew = np.mean(self.tonightsSlewTimes)
         newMakeups = self.nightScheduler.notifyNightEnd(avgSlew)
