@@ -6,7 +6,7 @@ from graphics.GraphicalMonitor import GraphicalMonitor
 import numpy as np
 from minis.Scheduler import Scheduler
 from Visit import PROP_WFD, PROP_DD
-import Config
+import config
 from lsst.sims.speedObservatory import sky
 from lsst.sims.speedObservatory import Telescope
 from SkyMap import SkyMap
@@ -95,7 +95,7 @@ class Simulator:
         # make a TimeHandler to give to the CloudModel
         # TODO use sims_speedObservatory instead
         dateFormat = "%Y-%m-%d"
-        startDatetime = datetime.utcfromtimestamp(Config.surveyStartTime)
+        startDatetime = datetime.utcfromtimestamp(config.surveyStartTime)
         timeHandler = TimeHandler(datetime.strftime(startDatetime, dateFormat))
         self.cloudModel = CloudModel(timeHandler)
         # load the cloud database
@@ -120,7 +120,7 @@ class Simulator:
         self.earlyNightEndWasteTime = 0
 
         # run the survey!
-        for nightNum in range(Config.surveyNumNights):
+        for nightNum in range(config.surveyNumNights):
             print("Night:", nightNum, end="\r")
             sys.stdout.flush()
 
@@ -152,8 +152,8 @@ class Simulator:
             about the order in which nights are simulated, but the Scheduler
             will probably get confused if nights are not simulated sequentially
         """
-        twilStart = sky.twilStart(Config.surveyStartTime, nightNum)
-        twilEnd   = sky.twilEnd(Config.surveyStartTime, nightNum)
+        twilStart = sky.twilStart(config.surveyStartTime, nightNum)
+        twilEnd   = sky.twilEnd(config.surveyStartTime, nightNum)
 
         # start out the simulation at the beginning of the night
         self.curTime = twilStart
@@ -177,12 +177,12 @@ class Simulator:
                 break
 
             # skip forward in time if there are clouds
-            deltaT = self.curTime - Config.surveyStartTime
+            deltaT = self.curTime - config.surveyStartTime
             cloudCover = self.cloudModel.get_cloud(deltaT)
             timeBeforeDomeClose = self.curTime
-            while cloudCover > Config.maxCloudCover and self.curTime <= twilEnd:
+            while cloudCover > config.maxCloudCover and self.curTime <= twilEnd:
                 self.curTime += 600
-                deltaT = self.curTime - Config.surveyStartTime
+                deltaT = self.curTime - config.surveyStartTime
                 cloudCover = self.cloudModel.get_cloud(deltaT)
 
             # if the dome closed due to clouds, get a fresh visit from the
@@ -205,13 +205,13 @@ class Simulator:
                 if i > 0 and not wasDomeJustClosed:
                     slewTime = self.tel.calcSlewTime(prevAlt, prevAz, prevFilter,
                                                      alt, az, visit.filter,
-                                                     laxDome = Config.laxDome)
+                                                     laxDome = config.laxDome)
                     self.curTime += slewTime
                     self.slewTimes.append(slewTime)
 
                 # don't observe if the night is about to end
                 if(self.curTime + visit.expTime +
-                        Config.visitOverheadTime > twilEnd):
+                        config.visitOverheadTime > twilEnd):
                     break
 
                 # notify the skyMap of the visit
@@ -232,7 +232,7 @@ class Simulator:
                 # add the exposure time of this visit to the current time
                 assert(visit.expTime >= 0)
                 self.curTime += visit.expTime
-                self.curTime += Config.visitOverheadTime
+                self.curTime += config.visitOverheadTime
 
                 # let the scheduler know we "carried out" this visit
                 self.sched.notifyVisitComplete(visit, self.curTime)

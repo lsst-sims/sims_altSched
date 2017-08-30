@@ -5,8 +5,8 @@ from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from minis.RotationGenerator import RotationGenerator
 from Visit import VisitPair
-import Config
-import Utils
+import config
+import utils
 from astropy import wcs
 
 class MiniSurvey:
@@ -95,24 +95,24 @@ class MiniSurvey:
 
         # calculate min/maxDec that correspond to the passed-in direction
         # and modify min/maxRa if we're in the zenith dec band
-        if direction == Config.NORTH:
-            minDec = telescope.latitude + Config.zenithBuffer
-            maxDec = Config.maxDec
+        if direction == config.NORTH:
+            minDec = telescope.latitude + config.zenithBuffer
+            maxDec = config.maxDec
             # min/maxRa remain unchanged
-        elif direction == Config.SOUTH:
-            minDec = Config.minDec
-            maxDec = telescope.latitude - Config.zenithBuffer
+        elif direction == config.SOUTH:
+            minDec = config.minDec
+            maxDec = telescope.latitude - config.zenithBuffer
             # min/maxRa remain unchanged
-        elif direction == Config.EAST:
-            minDec = telescope.latitude - Config.zenithBuffer
-            maxDec = telescope.latitude + Config.zenithBuffer
-            minRa += Config.zenithBuffer + Config.zenithBufferOffset
-            maxRa += Config.zenithBuffer + Config.zenithBufferOffset
+        elif direction == config.EAST:
+            minDec = telescope.latitude - config.zenithBuffer
+            maxDec = telescope.latitude + config.zenithBuffer
+            minRa += config.zenithBuffer + config.zenithBufferOffset
+            maxRa += config.zenithBuffer + config.zenithBufferOffset
         else:
             raise ValueError("Invalid direction: " + str(direction))
 
         # choose the subset of pointings that lie in the min/maxRa/Dec rectangle
-        validRa = Utils.areRasInRange(allPointings[:,0], (minRa, maxRa))
+        validRa = utils.areRasInRange(allPointings[:,0], (minRa, maxRa))
         validDec = ((minDec < allPointings[:,1]) &
                     (maxDec > allPointings[:,1]))
         validMask = validRa & validDec

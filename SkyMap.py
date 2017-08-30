@@ -5,8 +5,8 @@ import numpy as np
 
 from lsst.sims.speedObservatory import sky
 from lsst.sims.speedObservatory import Telescope
-import Utils
-import Config
+import utils
+import config
 import itertools
 
 import palpy
@@ -49,18 +49,18 @@ class SkyMap:
     def altaz2imdata(self, altaz):
         """
         Converts alt/az to indices into the imdata array at the time
-        specified by Config.surveyStartTime
+        specified by config.surveyStartTime
         """
         alt = altaz[:,0]
         az = altaz[:,1]
-        ra, dec = sky.altaz2radec(alt, az, Config.surveyStartTime)
+        ra, dec = sky.altaz2radec(alt, az, config.surveyStartTime)
         ra -= self.ra0
         return self.radec2imdata(np.vstack([ra, dec]).T)
 
     def imdata2altaz(self, imdata):
         """
         Converts indices into the imdata array into alt/az at the time
-        specified by Config.surveyStartTime
+        specified by config.surveyStartTime
         """
         raise NotImplementedError("imdata2altaz not implemented yet")
         return
@@ -108,10 +108,10 @@ class SkyMap:
         self.xCenter = int((self.xMax - self.xMin) / 2)
         self.yCenter = int((self.yMax - self.yMin) / 2)
 
-        # calculate ra_0: the ra of the zenith at Config.surveyStartTime
+        # calculate ra_0: the ra of the zenith at config.surveyStartTime
         # this is used to make the zenith centered in the displayed image
         self.ra0 = sky.altaz2radec(np.pi/2, 0.,
-                                   Config.surveyStartTime)[0]
+                                   config.surveyStartTime)[0]
         # a list of all the pixels [y, x]
         # note that the order that these are created in is very important
         # since the innter loop in updateDisplay assumes this ordering 
@@ -169,7 +169,7 @@ class SkyMap:
 
     def addVisit(self, visit, time):
         # edgeOfFov should be the radius of a circle that includes all of the fov
-        edgeOfFov = Utils.spherical2Cartesian(0, 1.5 * self.telescope.fovWidth / 2)
+        edgeOfFov = utils.spherical2Cartesian(0, 1.5 * self.telescope.fovWidth / 2)
         r = np.linalg.norm(np.array([1,0,0]) - np.array(edgeOfFov))
 
         # get a list of all pixels which might lie on the focal plane
@@ -195,7 +195,7 @@ class SkyMap:
         
         raRange = ((visit.ra - deltaRa) % (2*np.pi), 
                    (visit.ra + deltaRa) % (2*np.pi))
-        withinRange = Utils.areRasInRange(candidateRas, raRange)
+        withinRange = utils.areRasInRange(candidateRas, raRange)
         candidatePixIds = candidatePixIds[withinRange]
 
         candidateSkyPix = self.skyPix[candidatePixIds]

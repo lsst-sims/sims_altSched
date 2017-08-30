@@ -1,8 +1,8 @@
 from minis import Scheduler
 from lsst.sims.speedObservatory import Telescope
 from lsst.sims.speedObservatory import sky
-from Config import NORTH, SOUTHEAST
-import Config
+from config import NORTH, SOUTHEAST
+import config
 import numpy as np
 
 # keep track of which filter we should start out in when looking
@@ -32,8 +32,8 @@ def twoFChanges(nightNum, direction, nScans):
     A list of length nScans containing the filter that should be used
     for each scan execution
     """
-    nightStartTime = sky.nightStart(Config.surveyStartTime, nightNum)
-    nightEndTime   = sky.nightEnd(  Config.surveyStartTime, nightNum)
+    nightStartTime = sky.nightStart(config.surveyStartTime, nightNum)
+    nightEndTime   = sky.nightEnd(  config.surveyStartTime, nightNum)
 
     # build a list `fs` of filters to use for each of `nScans` scans
     f = _startFilters[direction]
@@ -103,8 +103,8 @@ def maxFChanges(nightNum, direction, nScans):
     for each scan execution
     """
     # keep track of what time we expect it to be for each scan
-    timePerScan = sky.nightLength(Config.surveyStartTime, nightNum) / nScans
-    time = sky.twilStart(Config.surveyStartTime, nightNum)
+    timePerScan = sky.nightLength(config.surveyStartTime, nightNum) / nScans
+    time = sky.twilStart(config.surveyStartTime, nightNum)
 
     f = _startFilters[direction]
     fs = []
@@ -190,10 +190,10 @@ def _avoidFilters(time):
     moonRa, moonDec = sky.radecOfMoon(time)
     moonAlt, _ = sky.radec2altaz(moonRa, moonDec, time)
 
-    uMoonUp = moonAlt > Config.moonUMaxAlt
-    uMoonBright = moonPhase > Config.moonUMaxPhase
-    gMoonUp = moonAlt > Config.moonGMaxAlt
-    gMoonBright = moonPhase > Config.moonGMaxPhase
+    uMoonUp = moonAlt > config.moonUMaxAlt
+    uMoonBright = moonPhase > config.moonUMaxPhase
+    gMoonUp = moonAlt > config.moonGMaxAlt
+    gMoonBright = moonPhase > config.moonGMaxPhase
 
     avoidFilters = set()
     if uMoonUp and uMoonBright:

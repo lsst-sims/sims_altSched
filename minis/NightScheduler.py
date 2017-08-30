@@ -1,9 +1,9 @@
 from __future__ import division
 from __future__ import print_function
 
-from Config import NORTH, SOUTH, EAST, WEST, SOUTHEAST
-import Config
-import Utils
+from config import NORTH, SOUTH, EAST, WEST, SOUTHEAST
+import config
+import utils
 from minis.MiniSurvey import MiniSurvey
 from Visit import Visit
 from Visit import PROP_WFD, PROP_DD
@@ -76,7 +76,7 @@ class NightScheduler:
         self.tonightsMini = None
 
         # figure out what DD visit we're going to do tonight
-        if Config.useDD:
+        if config.useDD:
             self.DDVisit = self._getTonightsDD()
         else:
             self.DDVisit = None
@@ -98,10 +98,10 @@ class NightScheduler:
             else:
                 maxRa = ras.max()
                 minRa = ras.min()
-            return Utils.isRaInRange(self.DDVisit.ra, (minRa, maxRa))
+            return utils.isRaInRange(self.DDVisit.ra, (minRa, maxRa))
 
         # figure out how many visits we'll probably do tonight
-        nightLength = sky.nightLength(Config.surveyStartTime, self.nightNum)
+        nightLength = sky.nightLength(config.surveyStartTime, self.nightNum)
         # the period of exposure taking is the sum of the exposure time,
         # the visit overhead time (shutter/intermediate readout),
         # and the slew time
@@ -260,7 +260,7 @@ class NightScheduler:
 
             # yield an actual visit, not a visitPair, to the telescope
             (ra, dec) = (visitPair.ra, visitPair.dec)
-            expTime = Config.WFDExpTime
+            expTime = config.WFDExpTime
 
             if not visitPair.visit1.isComplete:
                 visitPair.visit1.expTime = expTime
@@ -331,8 +331,8 @@ class NightScheduler:
         # yet to be completed
         raRange = self._getTonightsRaRange()
         if direction == EAST:
-            raRange = (raRange[0] + Config.zenithBufferOffset,
-                       raRange[1] + Config.zenithBufferOffset)
+            raRange = (raRange[0] + config.zenithBufferOffset,
+                       raRange[1] + config.zenithBufferOffset)
 
         visitPairs = set()
         for visitPair in self.makeupVPs:
@@ -341,8 +341,8 @@ class NightScheduler:
                 # note that this means a visit returned by this function
                 # as pending might already be half-completed.
                 # schedule() must handle this case
-                if Utils.isRaInRange(visitPair.ra, raRange) and \
-                        Utils.directionOfDec(visitPair.dec) == direction:
+                if utils.isRaInRange(visitPair.ra, raRange) and \
+                        utils.directionOfDec(visitPair.dec) == direction:
                     visitPairs.add(visitPair)
         return visitPairs
 
@@ -353,8 +353,8 @@ class NightScheduler:
     def _expectedVisitTime(self):
         """ Returns the expected average visit time including slew """
         return (_estAvgSlewTimes[self.direction] +
-                Config.WFDExpTime +
-                Config.visitOverheadTime)
+                config.WFDExpTime +
+                config.visitOverheadTime)
 
     def _getTonightsDD(self):
         """ Decides which DD field to observe for tonight
@@ -363,8 +363,8 @@ class NightScheduler:
         found for the night, sets self.DDVisit to None
         """
 
-        nightStart = sky.nightStart(Config.surveyStartTime, self.nightNum)
-        nightEnd = sky.nightEnd(Config.surveyStartTime, self.nightNum)
+        nightStart = sky.nightStart(config.surveyStartTime, self.nightNum)
+        nightEnd = sky.nightEnd(config.surveyStartTime, self.nightNum)
         minRa = sky.raOfMeridian(nightStart)
         maxRa = sky.raOfMeridian(nightEnd)
 
@@ -373,34 +373,34 @@ class NightScheduler:
             # check if the night will end before we could finish
             # the DD exposure
             # raBuffer is how far the sky will move during the exposure
-            raBuffer = Config.DDExpTime / (24*3600) * 2*np.pi
+            raBuffer = config.DDExpTime / (24*3600) * 2*np.pi
 
-            DDDirection = Utils.directionOfDec(dec)
+            DDDirection = utils.directionOfDec(dec)
 
             if DDDirection == NORTH:
-                inRaRange = Utils.isRaInRange(ra, (minRa, maxRa - raBuffer))
+                inRaRange = utils.isRaInRange(ra, (minRa, maxRa - raBuffer))
             elif DDDirection == SOUTH:
-                inRaRange = Utils.isRaInRange(ra, (minRa, maxRa - raBuffer))
+                inRaRange = utils.isRaInRange(ra, (minRa, maxRa - raBuffer))
                 DDDirection = SOUTHEAST
             elif DDDirection == EAST:
                 # DD visits in the East need to be in the offset
                 # allowable RA range
-                raRange = (minRa + Config.zenithBufferOffset + raBuffer,
-                           maxRa + Config.zenithBufferOffset - raBuffer)
-                inRaRange = Utils.isRaInRange(ra, raRange)
+                raRange = (minRa + config.zenithBufferOffset + raBuffer,
+                           maxRa + config.zenithBufferOffset - raBuffer)
+                inRaRange = utils.isRaInRange(ra, raRange)
                 DDDirection = SOUTHEAST
 
             # the DD ra must be less than maxRa - raBuffer so that
             # the night doesn't end while the DD exposure is happening
             if inRaRange and DDDirection == self.direction:
-                return Visit(PROP_DD, None, ra, dec, 0, Config.DDExpTime, 'u')
+                return Visit(PROP_DD, None, ra, dec, 0, config.DDExpTime, 'u')
 
         # if no suitable DD field was found, return None
         return None
 
     def _getTonightsRaRange(self):
-        twilStart = sky.twilStart(Config.surveyStartTime, self.nightNum)
-        twilEnd = sky.twilEnd(Config.surveyStartTime, self.nightNum)
+        twilStart = sky.twilStart(config.surveyStartTime, self.nightNum)
+        twilEnd = sky.twilEnd(config.surveyStartTime, self.nightNum)
 
         raStart = sky.raOfMeridian(twilStart)
         raEnd = sky.raOfMeridian(twilEnd)
@@ -452,16 +452,16 @@ class NightScheduler:
         if direction == EAST:
             # easterly scans are offset past the zenith buffer zone
             # in RA by zenithBufferOffset
-            ERaMin = raMin + Config.zenithBuffer + Config.zenithBufferOffset
-            ERaMax = raMax + Config.zenithBuffer + Config.zenithBufferOffset
+            ERaMin = raMin + config.zenithBuffer + config.zenithBufferOffset
+            ERaMax = raMax + config.zenithBuffer + config.zenithBufferOffset
             ERaMin %= 2*np.pi
             ERaMax %= 2*np.pi
 
             validVisitPairs = [v for v in visitPairs
-                               if Utils.isRaInRange(v.ra, (ERaMin, ERaMax)) and
-                               Utils.directionOfDec(v.dec) == direction]
+                               if utils.isRaInRange(v.ra, (ERaMin, ERaMax)) and
+                               utils.directionOfDec(v.dec) == direction]
 
-            numCols = int(raRange / Config.EScanWidth)
+            numCols = int(raRange / config.EScanWidth)
             # there are 2*numCols total scans in a 2xnumCols grid
             """
             zenith     ______________________________________
@@ -491,8 +491,8 @@ class NightScheduler:
             raMid = raMin + raRange / 2
 
             validVisitPairs = [v for v in visitPairs
-                               if Utils.isRaInRange(v.ra, (raMin, raMax)) and
-                                  Utils.directionOfDec(v.dec) == direction]
+                               if utils.isRaInRange(v.ra, (raMin, raMax)) and
+                                  utils.directionOfDec(v.dec) == direction]
 
             # the field of view width should be approximately the average
             # vertical distance between pointings in a scan unless we're
@@ -514,10 +514,10 @@ class NightScheduler:
                 sphericalCoords = [[visitPair.ra, visitPair.dec]
                                    for visitPair in validVisitPairs]
                 sphericalCoords = np.array(sphericalCoords)
-                cartesianCoords = Utils.spherical2Cartesian(sphericalCoords[:,0],
+                cartesianCoords = utils.spherical2Cartesian(sphericalCoords[:,0],
                                                             sphericalCoords[:,1])
 
-                cartesianMid = Utils.spherical2Cartesian(raMid, 0)
+                cartesianMid = utils.spherical2Cartesian(raMid, 0)
                 displacementVector = np.cross(cartesianMid, [0,0,-1])
                 displacements = np.dot(displacementVector, cartesianCoords.T)
 
@@ -597,10 +597,10 @@ class NightScheduler:
         return revisitGroups
 
     def _getSoutheastRevisitGroups(self, requestedNumVPs):
-        SExpectedNumVPs = (requestedNumVPs * Utils.areaInDir(SOUTH) /
-                           Utils.areaInDir(SOUTHEAST))
-        EExpectedNumVPs = (requestedNumVPs * Utils.areaInDir(EAST) /
-                           Utils.areaInDir(SOUTHEAST))
+        SExpectedNumVPs = (requestedNumVPs * utils.areaInDir(SOUTH) /
+                           utils.areaInDir(SOUTHEAST))
+        EExpectedNumVPs = (requestedNumVPs * utils.areaInDir(EAST) /
+                           utils.areaInDir(SOUTHEAST))
 
         SMakeupVPs = self._getMakeupVPs(SOUTH)
         EMakeupVPs = self._getMakeupVPs(EAST)
@@ -665,7 +665,7 @@ class NightScheduler:
         # catch the E fields before they hit the zenith avoidance zone
 
         raOfZenith = self._getTonightsRaRange()[0]
-        cutoffRa = raOfZenith + Config.zenithBuffer
+        cutoffRa = raOfZenith + config.zenithBuffer
 
         EScansRas = [np.array([v.ra for v in scan]) for scan in EScans]
         EMinRas = np.zeros(len(EScansRas))
@@ -673,7 +673,7 @@ class NightScheduler:
             if len(ras) == 0:
                 # TODO
                 #print("len(ras)=0 :(. nightNum =", nightNum)
-                #print("nightLen", sky.nightLength(Config.surveyStartTime, nightNum) / 3600)
+                #print("nightLen", sky.nightLength(config.surveyStartTime, nightNum) / 3600)
                 #print("EScans len", [len(scan) for scan in EScans])
                 #print("SScans len", [len(scan) for scan in SScans])
                 #print("avgVisitTime", self.estAvgExpTime + self.SEEstAvgSlewTime)
@@ -699,8 +699,8 @@ class NightScheduler:
 
         timesLeft = ((EMinGroupRa - cutoffRa) % (2*np.pi)) * (3600*24) / (2*np.pi)
 
-        avgVisitTime = (Config.WFDExpTime + _estAvgSlewTimes[SOUTHEAST] +
-                        Config.visitOverheadTime)
+        avgVisitTime = (config.WFDExpTime + _estAvgSlewTimes[SOUTHEAST] +
+                        config.visitOverheadTime)
         EScanTimes = np.array(list(map(len, EScans))) * avgVisitTime
 
         # this is the time available between when we start a pair of East

@@ -6,8 +6,8 @@ import multiprocessing as mp
 from multiprocessing import Pool
 import itertools
 from lsst.sims.speedObservatory import Telescope
-import Config
-from Config import NORTH, SOUTH, EAST, SOUTHEAST
+import config
+from config import NORTH, SOUTH, EAST, SOUTHEAST
 
 def areRasInRange(ras, raRange):
     """ Calculate which of `ras` are within `raRange`
@@ -67,12 +67,12 @@ def directionOfDec(dec):
     -----
     Calling things in the zenith dec band EAST is kind of stupid, sorry
     """
-    if dec > Config.maxDec or dec < Config.minDec:
+    if dec > config.maxDec or dec < config.minDec:
         raise ValueError("Provided dec of " + str(dec) + " is outside " + \
                          "of the survey area.")
-    if dec > Telescope.latitude + Config.zenithBuffer:
+    if dec > Telescope.latitude + config.zenithBuffer:
         return NORTH
-    elif dec > Telescope.latitude - Config.zenithBuffer:
+    elif dec > Telescope.latitude - config.zenithBuffer:
         return EAST
     else:
         return SOUTH
@@ -90,16 +90,16 @@ def areaInDir(direction):
     The amount of survey area in `direction`, where EAST means
     "within the zenith dec band" (see note from directionOfDec())
     """
-    buf = Config.zenithBuffer
+    buf = config.zenithBuffer
     # int_{dec1}^{dec2} 2\pi r dr, where r=\cos\theta
     # = 2\pi (\sin(dec2) - \sin(dec1))
     if direction == NORTH:
-        return 2*np.pi*(np.sin(Config.maxDec) -
+        return 2*np.pi*(np.sin(config.maxDec) -
                         np.sin(Telescope.latitude + buf))
 
     elif direction == SOUTH:
         return 2*np.pi*(np.sin(Telescope.latitude - buf) -
-                        np.sin(Config.minDec))
+                        np.sin(config.minDec))
     elif direction == EAST:
         return 2*np.pi*(np.sin(Telescope.latitude + buf) -
                         np.sin(Telescope.latitude - buf))

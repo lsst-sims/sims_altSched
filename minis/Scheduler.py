@@ -1,14 +1,14 @@
 from __future__ import division
 
 import numpy as np
-import Config
-from Config import NORTH, SOUTH, EAST, WEST, SOUTHEAST
+import config
+from config import NORTH, SOUTH, EAST, WEST, SOUTHEAST
 from Visit import PROP_WFD, PROP_DD
 from lsst.sims.speedObservatory import sky
 from lsst.sims.speedObservatory import Telescope
 from Visit import Visit
 from Visit import VisitPair
-import Utils
+import utils
 from minis.NightScheduler import NightScheduler
 
 from matplotlib import pyplot as plt
@@ -50,11 +50,11 @@ class Scheduler:
         currently ready to be scheduled.
         """
         # decide which way to point tonight
-        NCoverage = self.NVisitsComplete / Utils.areaInDir(NORTH)
-        SCoverage = self.SVisitsComplete / Utils.areaInDir(SOUTH)
-        ECoverage = self.EVisitsComplete / Utils.areaInDir(EAST)
+        NCoverage = self.NVisitsComplete / utils.areaInDir(NORTH)
+        SCoverage = self.SVisitsComplete / utils.areaInDir(SOUTH)
+        ECoverage = self.EVisitsComplete / utils.areaInDir(EAST)
         SECoverage = ((self.SVisitsComplete + self.EVisitsComplete) /
-                      Utils.areaInDir(SOUTHEAST))
+                      utils.areaInDir(SOUTHEAST))
 
         if NCoverage < SECoverage:
             self.nightDirection = NORTH
@@ -93,7 +93,7 @@ class Scheduler:
                 # Don't change laxDome param without changing in Simulator too
                 slewTime = self.telescope.calcSlewTime(prevAlt, prevAz, prevFilter,
                                                        alt, az, visit.filter,
-                                                       laxDome = Config.laxDome)
+                                                       laxDome = config.laxDome)
                 self.tonightsSlewTimes.append(slewTime)
             prevAlt = alt
             prevAz = az
@@ -147,11 +147,11 @@ class Scheduler:
             self.nightScheduler.notifyVisitPairComplete(visitPair)
 
             # keep track of our coverage in each direction
-            if Utils.directionOfDec(visitPair.dec) == NORTH:
+            if utils.directionOfDec(visitPair.dec) == NORTH:
                 self.NVisitsComplete += 1
-            elif Utils.directionOfDec(visitPair.dec) == SOUTH:
+            elif utils.directionOfDec(visitPair.dec) == SOUTH:
                 self.SVisitsComplete += 1
-            elif Utils.directionOfDec(visitPair.dec) == EAST:
+            elif utils.directionOfDec(visitPair.dec) == EAST:
                 self.EVisitsComplete += 1
             else:
                 raise RuntimeError("Completed visit " + str(visit) + \

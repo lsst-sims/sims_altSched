@@ -4,7 +4,7 @@ import numpy as np
 
 from lsst.sims.speedObservatory import Telescope
 from lsst.sims.speedObservatory import sky
-import Config
+import config
 from SkyMap import SkyMap
 
 import pygame
@@ -89,7 +89,7 @@ class GraphicalMonitor:
         pygame.display.quit()
 
     def updateDisplay(self, skyMap, curTime):
-        startTime = Config.surveyStartTime
+        startTime = config.surveyStartTime
 
         # skyAngle is how far to rotate the sky to the right, so we
         # need it to be -\Delta meridian since the ra of the meridian
