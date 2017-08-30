@@ -10,6 +10,19 @@ import Config
 from Config import NORTH, SOUTH, EAST, SOUTHEAST
 
 def areRasInRange(ras, raRange):
+    """ Calculate which of `ras` are within `raRange`
+
+    Parameters
+    ----------
+    ras : numpy.ndarray
+        Array of RAs to be tested
+    raRange : 2-tuple of (minRa, maxRa)
+        The range to be tested
+
+    Returns
+    -------
+    A numpy.ndarray indicating which of `ras` are within `raRange`
+    """
     minRa, maxRa = raRange
     if minRa < maxRa:
         return (minRa < ras) & (ras < maxRa)
@@ -17,6 +30,20 @@ def areRasInRange(ras, raRange):
         return (minRa < ras) | (ras < maxRa)
 
 def isRaInRange(ra, raRange):
+    """ Calculate whether `ra` is within `raRange`
+
+    Parameters
+    ----------
+    ra : float
+        The RA to be tested
+    raRange : 2-tuple of (minRa, maxRa)
+        The range to be tested
+
+    Returns
+    -------
+    A boolean indicating whether `ra` is within `raRange`
+    """
+
     minRa, maxRa = raRange
     if minRa < maxRa:
         return minRa < ra and ra < maxRa
@@ -24,6 +51,22 @@ def isRaInRange(ra, raRange):
         return minRa < ra or  ra < maxRa
 
 def directionOfDec(dec):
+    """ Calculate which cardinal direction `dec` is in
+
+    Parameters
+    ----------
+    dec : float
+        The declination of interest in radians
+
+    Returns
+    -------
+    One of NORTH, SOUTH, or EAST, where EAST means the dec
+    falls within the zenith dec band.
+
+    Notes
+    -----
+    Calling things in the zenith dec band EAST is kind of stupid, sorry
+    """
     if dec > Config.maxDec or dec < Config.minDec:
         raise ValueError("Provided dec of " + str(dec) + " is outside " + \
                          "of the survey area.")
@@ -35,6 +78,18 @@ def directionOfDec(dec):
         return SOUTH
 
 def areaInDir(direction):
+    """ Returns how much area (in steradians) falls in `direction
+
+    Parameters
+    ----------
+    direction : enum(NORTH, SOUTH, EAST, SOUTHEAST)
+        The direction of interest
+
+    Returns
+    -------
+    The amount of survey area in `direction`, where EAST means
+    "within the zenith dec band" (see note from directionOfDec())
+    """
     buf = Config.zenithBuffer
     # int_{dec1}^{dec2} 2\pi r dr, where r=\cos\theta
     # = 2\pi (\sin(dec2) - \sin(dec1))
@@ -67,23 +122,3 @@ def spherical2Cartesian(phi, theta):
         return np.vstack([x, y, z]).T
     else:
         return [x, y, z]
-
-
-# thought I would need this but seems like
-# list(itertools.chain.from_iterable(array)) is fast enough
-# by itself. Leaving this here just in case...
-def _sumWorker(array):
-    return list(itertools.chain.from_iterable(array))
-
-def sumArrayOfLists(arrayOfLists):
-    # 1000 arbitrarily chosen
-    sublistSize = 1000
-
-    nCores = mp.cpu_count()
-    p = Pool(nCores)
-    nSublists = int(len(arrayOfLists) / sublistSize)
-    summed = p.map(_sumWorker, np.array_split(arrayOfLists, nSublists))
-    p.close()
-    p.join()
-
-    return _sumWorker(summed)

@@ -2,7 +2,6 @@ from __future__ import division
 from __future__ import print_function
 
 from graphics.GraphicalMonitor import GraphicalMonitor
-#from graphics.GraphicalMonitor3D import GraphicalMonitor3D
 
 import numpy as np
 from minis.Scheduler import Scheduler
@@ -11,10 +10,8 @@ import Config
 from lsst.sims.speedObservatory import sky
 from lsst.sims.speedObservatory import Telescope
 from SkyMap import SkyMap
-import time
 import sys
 import os
-from multiprocessing import Pool
 from datetime import datetime
 
 from matplotlib import pyplot as plt
@@ -25,31 +22,72 @@ from lsst.sims.ocs.environment.cloud_model import CloudModel
 
 from lsst.sims.speedObservatory.utils import unix2mjd
 
-trackMap = True
+# flag to control whether a SkyMap instance is used to track how many times
+# each sky pixel is observed
+trackMap = False
+
+# flag to control whether a window pops up to visualize the progress of the
+# scheduler
 showDisp = True and trackMap
+
+# which mode to run the graphics in (it's passed as the argument to the
+# GraphicalMonitor constructor). Options are "nvisits" -- visualize the total
+# number of visits to each pixel -- and "filters" -- visualize the last
+# filter used to observe each pixel
 graphicsMode = "filters"
-saveMovie = False
+
+# flag to control whether to save each frame of the visualization to disk
+saveMovie = False and showDisp
+
+# location on disk to save each frame
+movieDir = "images/pygame"
+
+# flag to control whether summary plots are displayed after the simulation
+# is complete (whether or not to call _outputSummaryStats())
 showSummaryPlots = True and trackMap
+
+# flag to control whether or not to clear the visualization after each night
 clearDisplayNightly = True
+
+# flag to control whether the observation sequence is written to disk
 writeCsv = False
 
-resScale = 3
-runName = "9011_4vo_maxf_lax_3set_97"
+# the resolution of the visualization (using 2x will give 4 times as many pixels
+# as using x)
+resScale = 4
 
-assert(not (showDisp and not trackMap))
+# the name of the run. The csv output is saved to
+# ./results/`runName`/`runName`.csv
+runName = "9013_1vo_maxf_nolax_3set_98"
 
 class Simulator:
-    def __init__(self):
-        pass
-
     def time(self):
+        """ Get the current simulated time
+
+        Returns
+        -------
+        The current simulated time as a unix timestamp
+        """
         return self.curTime
 
     def run(self, tel):
+        """ Run a simulation
+
+        Parameters
+        ----------
+        tel : lsst.sims.speedObservatory.Telescope
+            The Telescope instance to run the simulation for
+
+        Notes
+        -----
+        Parameters controlling the operation of the Simulator are at
+        the top of this file. Parameters controlling the survey
+        are in config.py
+        """
         self.tel = tel
 
         # read in downtime nights TODO use SOCS/speedObservatory for this
-        downtimeNights = self.parseDowntime()
+        downtimeNights = self._parseDowntime()
 
         # initialize the scheduler
         self.sched = Scheduler(telescope=self.tel, context=self)
@@ -63,7 +101,7 @@ class Simulator:
         # load the cloud database
         self.cloudModel.initialize()
 
-        # resScale is proportional to the resolution (and therefore the speed)
+        # create the skyMap and display if necessary
         if trackMap:
             self.skyMap = SkyMap(telescope=self.tel, resScale=resScale)
         if showDisp:
@@ -77,17 +115,21 @@ class Simulator:
             self.outFile = open("results/" + runName + "/" + runName + ".csv", "w")
             self.outFile.write("time,prop,ra,dec,filter\n")
 
-        # run the survey!
         # these variables keep track of wasted time
         self.fieldsRisingWasteTime = 0
         self.earlyNightEndWasteTime = 0
+
+        # run the survey!
         for nightNum in range(Config.surveyNumNights):
             print("Night:", nightNum, end="\r")
             sys.stdout.flush()
+
+            # skip downtime nights
             if nightNum in downtimeNights:
                 continue
 
-            self.simulateNight(nightNum)
+            # simulate the night
+            self._simulateNight(nightNum)
             self.sched.notifyNightEnd()
 
         print("time wasted waiting for fields to rise:", self.fieldsRisingWasteTime)
@@ -100,7 +142,16 @@ class Simulator:
         if showSummaryPlots:
             self._outputSummaryStats()
 
-    def simulateNight(self, nightNum):
+    def _simulateNight(self, nightNum):
+        """ Simulate a single night
+
+        Parameters
+        ----------
+        nightNum : int
+            The index of the night to be scheduler. The Simulator is agnostic
+            about the order in which nights are simulated, but the Scheduler
+            will probably get confused if nights are not simulated sequentially
+        """
         twilStart = sky.twilStart(Config.surveyStartTime, nightNum)
         twilEnd   = sky.twilEnd(Config.surveyStartTime, nightNum)
 
@@ -112,8 +163,13 @@ class Simulator:
 
         # prevFilter is the filter of the last visit
         (prevFilter, prevAlt, prevAz) = ('', -1, -1)
+
+        # flag to keep track of whether the dome was just closed due to weather
         wasDomeJustClosed = False
+
+        # loop through the visits given by the scheduler
         for i, visit in enumerate(self.sched.scheduleNight(nightNum)):
+            # figure out whether/how we should update the display
             perNight, deltaI = self.getUpdateRate(nightNum, i)
 
             # stop if the night is over
@@ -138,12 +194,7 @@ class Simulator:
                 # continue to get a new visit that isn't stale
                 continue
 
-            # if visit is None, that means the scheduler has nowhere to point
-            # at the moment
-            if visit is None:
-                self.curTime += 30
-                self.fieldsRisingWasteTime += 30
-            else:
+            if visit is not None:
                 alt, az = sky.radec2altaz(visit.ra, visit.dec, self.curTime)
                 # make sure this az is a valid place to look
                 if alt < self.tel.minAlt or alt > self.tel.maxAlt:
@@ -158,6 +209,7 @@ class Simulator:
                     self.curTime += slewTime
                     self.slewTimes.append(slewTime)
 
+                # don't observe if the night is about to end
                 if(self.curTime + visit.expTime +
                         Config.visitOverheadTime > twilEnd):
                     break
@@ -167,6 +219,7 @@ class Simulator:
                 if trackMap:
                     self.skyMap.addVisit(visit, self.curTime)
 
+                # write the observation to the csv output if necessary
                 if writeCsv:
                     assert(visit.prop == PROP_WFD or visit.prop == PROP_DD)
                     prop = "wfd" if visit.prop == PROP_WFD else "dd"
@@ -177,6 +230,7 @@ class Simulator:
                                        visit.filter + "\n")
 
                 # add the exposure time of this visit to the current time
+                assert(visit.expTime >= 0)
                 self.curTime += visit.expTime
                 self.curTime += Config.visitOverheadTime
 
@@ -184,6 +238,11 @@ class Simulator:
                 self.sched.notifyVisitComplete(visit, self.curTime)
 
                 (prevAlt, prevAz, prevFilter) = (alt, az, visit.filter)
+            else:
+                # the visit was None, which means the scheduler has nowhere to
+                # point at the moment
+                self.curTime += 30
+                self.fieldsRisingWasteTime += 30
 
             wasDomeJustClosed = False
 
@@ -194,7 +253,7 @@ class Simulator:
                 prevI = i
                 # save each frame if the saveMovie flag is set
                 if saveMovie:
-                    self.display.saveFrame("images/pygame/%07d.png" % i)
+                    self.display.saveFrame(movieDir + "/%07d.png" % i)
 
         # the night is over
 
@@ -211,7 +270,7 @@ class Simulator:
         if showDisp and perNight:
             self.display.updateDisplay(self.skyMap, self.curTime)
             if saveMovie:
-                self.display.saveFrame("images/pygame/%07d.png" % i)
+                self.display.saveFrame(movieDir + "/%07d.png" % i)
 
         # clear the skyMap so the next updateDisplay won't have tonight's visits
         if showDisp and clearDisplayNightly:
@@ -280,6 +339,29 @@ class Simulator:
 
     @staticmethod
     def getUpdateRate(nightNum, i):
+        """ Controls how often the display is updated
+
+        Parameters
+        ----------
+        nightNum : int
+            The index of the night being simulated
+        i : int
+            The index of the visit within the night
+
+        Returns
+        -------
+        perNight : bool
+            Whether or not to update the display nightly
+        deltaI : int
+            If perNight is False, how often to update the display
+
+        Notes
+        -----
+        This method is only useful if you want a variable update rate --
+        i.e. if you want to make a movie of a simulation that changes speed
+        over time. What's currently implemented will make the video speed
+        up from one frame per visit up to one frame per night.
+        """
         # returning (False, 1) makes the display just show every visit
         return (False, 1)
 
@@ -309,8 +391,22 @@ class Simulator:
         return (perNight, deltaI)
 
     # TODO use sims_speedObservatory instead
-    def parseDowntime(self, schedFileName="schedDown.conf",
+    def _parseDowntime(self, schedFileName="schedDown.conf",
                             unschedFileName="unschedDown.conf"):
+        """ Gets the downtime nights from the configuration files
+
+        Parameters
+        ----------
+        schedFileName : string
+            The name of the file containing the scheduled downtime
+        unschedFileName : string
+            The name of the file containing the unscheduled downtime
+
+        Returns
+        -------
+        A set containing all night indices that are down (whether scheduled
+        or unscheduled)
+        """
         def parseSchedFile(filename):
             downtimeNights = set([])
             with open(filename) as schedFile:
@@ -335,9 +431,11 @@ class Simulator:
 
 
 def runDefaultSim():
+    """ Runs a simulation with the default parameters """
     sim = Simulator()
     # use a telescope with default parameters
     tel = Telescope()
+    # make the results directory if necessary
     if not os.path.isdir("results/" + runName):
         os.mkdir("results/" + runName)
     return sim.run(tel)

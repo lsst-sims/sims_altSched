@@ -12,56 +12,26 @@ _startFilters =   {NORTH:     Telescope.filters[1],
 _leftOutFilters = {NORTH:     Telescope.filters[0], 
                    SOUTHEAST: Telescope.filters[0]}
 
-def _fId(f):
-    # get the id of a filter such as 'u' or 'r'
-    return Telescope.filterId[f]
-
-def _inc(f):
-    # helper to increment mod len(Telescope.filters)
-    fId = _fId(f)
-    return Telescope.filters[(fId + 1) % len(Telescope.filters)]
-
-def _attemptFilter(direction, attempt, backup):
-    # helper to choose a filter based on which are available tonight
-    if attempt == _leftOutFilters[direction]:
-        return backup
-    else:
-        return attempt
-
-def maxFChangesNightOver(direction):
-    # set up startFilterId for next night
-    # it needs to be incremented by 2, with the leftout filter skipped over
-    # if necessary 
-    # TODO explain better
-    for i in range(2):
-        nextFilter = _inc(_startFilters[direction])
-        if _startFilters[direction] == _leftOutFilters[direction]:
-            _startFilters[direction] = nextFilter
-            nextFilter = _inc(nextFilter)
-        _startFilters[direction] = nextFilter
-
-    # also update the left-out filter
-    _leftOutFilters[direction] = _inc(_leftOutFilters[direction])
-
-def _avoidFilters(time):
-    moonPhase = sky.phaseOfMoon(time)
-    moonRa, moonDec = sky.radecOfMoon(time)
-    moonAlt, _ = sky.radec2altaz(moonRa, moonDec, time)
-
-    uMoonUp = moonAlt > Config.moonUMaxAlt
-    uMoonBright = moonPhase > Config.moonUMaxPhase
-    gMoonUp = moonAlt > Config.moonGMaxAlt
-    gMoonBright = moonPhase > Config.moonGMaxPhase
-
-    avoidFilters = set()
-    if uMoonUp and uMoonBright:
-        avoidFilters.add("u")
-    if gMoonUp and gMoonBright:
-        avoidFilters.add("g")
-
-    return avoidFilters
+# TODO this should probably be refactored into two classes, one
+# for each filter scheduling method (twoF and maxF).
 
 def twoFChanges(nightNum, direction, nScans):
+    """ Returns filters that change only twice a night
+
+    Parameters
+    ----------
+    nightNum : int
+        The index of the night being scheduled
+    direction : enum(NORTH, SOUTHEAST)
+        The direction of the night being scheduled
+    nScans : int
+        The number of scan executions being carried out tonight
+
+    Returns
+    -------
+    A list of length nScans containing the filter that should be used
+    for each scan execution
+    """
     nightStartTime = sky.nightStart(Config.surveyStartTime, nightNum)
     nightEndTime   = sky.nightEnd(  Config.surveyStartTime, nightNum)
 
@@ -94,6 +64,17 @@ def twoFChanges(nightNum, direction, nScans):
     return fs
 
 def twoFChangesNightOver(direction):
+    """ Notify filtersequence that the night is over
+
+    Parameters
+    ----------
+    direction : enum(NORTH, SOUTHEAST)
+        The direction of the night that just ended
+
+    This method should only be used in conjunction with
+    twoFChanges()
+    """
+
     nextFilter = _inc(_startFilters[direction])
     if _startFilters[direction] == _leftOutFilters[direction]:
         _startFilters[direction] = nextFilter
@@ -104,7 +85,23 @@ def twoFChangesNightOver(direction):
     _leftOutFilters[direction] = _inc(_leftOutFilters[direction])
 
 
-def maxFChanges(nightNum, direction,  nScans):
+def maxFChanges(nightNum, direction, nScans):
+    """ Returns filters that change between every visit/revisit pair
+
+    Parameters
+    ----------
+    nightNum : int
+        The index of the night being scheduled
+    direction : enum(NORTH, SOUTHEAST)
+        The direction of the night being scheduled
+    nScans : int
+        The number of scan executions being carried out tonight
+
+    Returns
+    -------
+    A list of length nScans containing the filter that should be used
+    for each scan execution
+    """
     # keep track of what time we expect it to be for each scan
     timePerScan = sky.nightLength(Config.surveyStartTime, nightNum) / nScans
     time = sky.twilStart(Config.surveyStartTime, nightNum)
@@ -150,3 +147,74 @@ def maxFChanges(nightNum, direction,  nScans):
     fs.append(bookendFilter)
 
     return fs
+
+def maxFChangesNightOver(direction):
+    """ Notify filtersequence that the night is over
+
+    Parameters
+    ----------
+    direction : enum(NORTH, SOUTHEAST)
+        The direction of the night that just ended
+
+    This method should only be used in conjunction with
+    maxFChanges()
+    """
+    # set up startFilterId for next night
+    # it needs to be incremented by 2, with the leftout filter skipped over
+    # if necessary
+    # TODO explain better
+    for i in range(2):
+        nextFilter = _inc(_startFilters[direction])
+        if _startFilters[direction] == _leftOutFilters[direction]:
+            _startFilters[direction] = nextFilter
+            nextFilter = _inc(nextFilter)
+        _startFilters[direction] = nextFilter
+
+    # also update the left-out filter
+    _leftOutFilters[direction] = _inc(_leftOutFilters[direction])
+
+def _avoidFilters(time):
+    """ Returns which filters we should avoid at time `time`
+
+    Parameters
+    ----------
+    time : float
+        The unix timestamp in question
+
+    Returns
+    -------
+    A set of filter names that should not be observed in at time `time
+    """
+
+    moonPhase = sky.phaseOfMoon(time)
+    moonRa, moonDec = sky.radecOfMoon(time)
+    moonAlt, _ = sky.radec2altaz(moonRa, moonDec, time)
+
+    uMoonUp = moonAlt > Config.moonUMaxAlt
+    uMoonBright = moonPhase > Config.moonUMaxPhase
+    gMoonUp = moonAlt > Config.moonGMaxAlt
+    gMoonBright = moonPhase > Config.moonGMaxPhase
+
+    avoidFilters = set()
+    if uMoonUp and uMoonBright:
+        avoidFilters.add("u")
+    if gMoonUp and gMoonBright:
+        avoidFilters.add("g")
+
+    return avoidFilters
+
+def _fId(f):
+    # get the id of a filter such as 'u' or 'r'
+    return Telescope.filterId[f]
+
+def _inc(f):
+    # helper to increment mod len(Telescope.filters)
+    fId = _fId(f)
+    return Telescope.filters[(fId + 1) % len(Telescope.filters)]
+
+def _attemptFilter(direction, attempt, backup):
+    # helper to choose a filter based on which are available tonight
+    if attempt == _leftOutFilters[direction]:
+        return backup
+    else:
+        return attempt

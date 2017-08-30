@@ -2,11 +2,16 @@ from __future__ import division
 import numpy as np
 
 class RotationGenerator:
+    """ Class to generate rotator angles """
     def __init__(self, initialValue=-np.pi/2, initialDirection=1):
         self.value = initialValue
         self.direction = initialDirection
 
     def rotations(self, telescope):
+        """ Generator that yields rotations
+
+        The rotations bounce between `minimum` and `maximum`
+        """
         minimum = telescope.minRotation
         maximum = telescope.maxRotation
 

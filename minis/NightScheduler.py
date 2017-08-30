@@ -29,6 +29,12 @@ with open("ddFields.csv", "r") as ddFile:
 
 
 class NightScheduler:
+    """ Class that schedules a single night
+
+    The main method is schedule(), though the various notify...() methods
+    must be called at the appropriate times as well. See comment in schedule()
+    for information on how the NightScheduler schedules.
+    """
     def __init__(self, telescope, nightNum, direction, makeupVPs):
         self.telescope = telescope
         self.nightNum = nightNum
@@ -41,6 +47,31 @@ class NightScheduler:
 
 
     def schedule(self):
+        """ Schedule the night
+
+        This method is a generator that yields Visit instances until it has
+        nowhere left to recommend pointing for the night. If self.direction
+        is NORTH, it schedules visits in a North/South scanning pattern shown
+        in the ascii art comment below. If self.direction is SOUTHEAST, it
+        alternates between scheduling visits in the South and visits in the
+        zenith dec band. For Southern scans, the pattern is the same as in the
+        North. For scans in the zenith dec band (Eastern scans), the scanning
+        pattern is similar but goes East/West.
+
+        The NightScheduler chooses which pointings to use for the night by
+        generating a new altsched.minis.MiniSurvey and then by drawing from
+        self.makeupVPs as necessary if there are not enough visits in the
+        new MiniSurvey. It is therefore important to choose a tiling with
+        a density that will allow the scheduler to keep up with the meridian
+        without drawing too heavily on self.makeupVPs. Note that it is not
+        currently supported to observe only a subset of each night's
+        MiniSurvey, so if the tiling is too dense, the scheduler will always
+        fall behind the meridian.
+
+        Yields
+        ------
+        The next Visit to be scheduled
+        """
         # this will hold the VPs in tonight's mini survey
         self.tonightsMini = None
 
@@ -209,8 +240,11 @@ class NightScheduler:
 
 
     def _schedulePath(self, path, filt):
-        for visitPair in path:
+        """ Schedules a list of pointings
 
+        This method only schedules one visit of each passed-in visitPair.
+        """
+        for visitPair in path:
             # check time to see if the dome closed since the last
             # visit. If so, the rest of this path is stale
             # TODO "path" is too generic since a path could be arbitrarily long
@@ -239,12 +273,58 @@ class NightScheduler:
 
 
     def notifyDomeClosed(self, timeClosed):
+        """ Method used to notify us that the dome just closed
+
+        This method should be called every time the dome is closed
+        or else the NightScheduler won't know to skip ahead. Note that the
+        schedule() method could check the current time after every visit
+        to make sure that not too much time has elapsed. But putting the
+        semantics of dome closing into an interrupt routine like this
+        makes explicit the control system/scheduler communication about
+        the dome closing that would be implicit if we just checked the time.
+
+        Parameters
+        ----------
+        timeClosed : float
+            The number of seconds that the dome was closed for
+        """
         # wasDomeJustClosed is an interrupt flag for schedule
         self.wasDomeJustClosed = True
         self.domeClosedDuration = timeClosed
 
     def notifyVisitPairComplete(self, visitPair):
+        """ Method used to notify us that a VisitPair was carried out
+
+        This should be called every time a VisitPair is completed (i.e.
+        both constituent Visits were carried out).
+
+        Parameters
+        ----------
+        visitPair : altSched.VisitPair
+            The VisitPair that was just completed
+        """
         self.tonightsMini.discard(visitPair)
+
+    def notifyNightEnd(self, avgSlewTime):
+        """ Method used to notify us that the night is over
+
+        This method updates the average slew time and manages
+        the filter bookkeeping
+
+        Parameters
+        ----------
+        avgSlewTime : float
+            The average slew time during the night that just ended (seconds)
+
+        Returns
+        -------
+        A set of VisitPairs that were part of tonight's tiling but did not
+        get fully executed.
+        """
+        # update the _estAvgSlewTimes for tonight's direction
+        _estAvgSlewTimes[self.direction] = avgSlewTime
+        filtersequence.maxFChangesNightOver(self.direction)
+        return self.tonightsMini
 
     def _getMakeupVPs(self, direction):
         # return all the visitPairs in makeupVPs that have
@@ -269,12 +349,6 @@ class NightScheduler:
 
     def _getFilters(self, nScans):
         return filtersequence.maxFChanges(self.nightNum, self.direction, nScans)
-
-    def notifyNightEnd(self, avgSlewTime):
-        # update the _estAvgSlewTimes for tonight's direction
-        _estAvgSlewTimes[self.direction] = avgSlewTime
-        filtersequence.maxFChangesNightOver(self.direction)
-        return self.tonightsMini
 
     def _expectedVisitTime(self):
         """ Returns the expected average visit time including slew """

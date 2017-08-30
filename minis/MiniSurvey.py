@@ -10,9 +10,23 @@ import Utils
 from astropy import wcs
 
 class MiniSurvey:
-    # the very first mini should have rotation -pi/2
-    prevRot = -1
-    prevPrevRot = -1
+    """ This is a static class that generates tilings
+
+    The main public method is newMiniSurvey, which returns a set of
+    VisitPairs in a requested RA/Dec rectangle.
+
+    TODO a refactoring I've been meaning to do is to make a base Tiling
+    interface with a method `getTiling(density)` that returns a full-sky
+    tiling with the specified number of pointings/steradian. Then subclasses
+    could execute different tilings.
+
+    It's important to be able to choose the density, since if the density of
+    a tiling is too high, the scheduler won't be able to keep up with the
+    meridian or will have to skip visits, which would likely increase slew
+    times. If the density is too low, the scheduler will either get ahead
+    of the meridian or will have to double cover, which wastes time observing
+    a field more than twice per night.
+    """
 
     rotationGenerator = RotationGenerator()
 
@@ -22,12 +36,39 @@ class MiniSurvey:
     @classmethod
     def setLatestRotation(cls, rotation, direction):
         # called when resuming the survey from a checkpoint
+        # TODO but checkpointing is not implemented
         cls.rotationGenerator = RotationGenerator(rotation, direction)
 
     @classmethod
     def newMiniSurvey(cls, telescope, minRa, maxRa, direction):
+        """ Return a new tiling of the sky
+
+        Parameters
+        ----------
+        telescope : lsst.sims.speedObservatory.Telescope
+            The telescope that the minisurvey is for
+        minRa : float
+            The minimum RA that should be included in the minisurvey (radians)
+        maxRa : float
+            The maximum RA that should be included in the minisurvey (radians)
+        direction : enum(NORTH, SOUTH, EAST)
+            The cardinal direction the minisurvey should be in
+
+        Returns
+        -------
+        A set of visitpairs that tile the requested area
+
+        Notes
+        -----
+        min/maxRa should be the RA range for the night. This method will
+        shift over the RA range to the right if direction is EAST. I know this
+        is non-ideal, sorry.
+        """
+
+        # TODO rotation isn't fully implemented yet
         rotation = next(cls.rotationGenerator.rotations(telescope))
-        #allPointings = cls._generateRandomPointings(telescope)
+
+        # get a tiling over the whole sphere
         allPointings = cls._realGeneratePointings(telescope)
 
         # now take the pointings and rotate them around the z and x
@@ -49,12 +90,11 @@ class MiniSurvey:
         newTheta = np.arcsin(cos(xDither)*sin(theta) + sin(xDither)*cos(theta)*sin(phi))
         allPointings = np.vstack([newPhi, newTheta]).T
 
-        #print "RA: (", raStart, ",", raEnd, ")"
-        #print "DEC: (", decStart, ",", decEnd, ")"
+        # TODO should rotate around y as well or else you get structured
+        # noise in the final result
 
-        # choose a subset of the pointings to get the desired shape:
-        # i.e. a rectangle in ra/dec space with the sub-rectangle of
-        # latitude \pm zenithBuffer shifted to the East
+        # calculate min/maxDec that correspond to the passed-in direction
+        # and modify min/maxRa if we're in the zenith dec band
         if direction == Config.NORTH:
             minDec = telescope.latitude + Config.zenithBuffer
             maxDec = Config.maxDec
@@ -71,6 +111,7 @@ class MiniSurvey:
         else:
             raise ValueError("Invalid direction: " + str(direction))
 
+        # choose the subset of pointings that lie in the min/maxRa/Dec rectangle
         validRa = Utils.areRasInRange(allPointings[:,0], (minRa, maxRa))
         validDec = ((minDec < allPointings[:,1]) &
                     (maxDec > allPointings[:,1]))
@@ -78,26 +119,11 @@ class MiniSurvey:
 
         pointings = allPointings[np.where(validMask)]
 
-        if len(pointings) > 1000:
-            # TODO debug: there shouldn't ever be more than 1000 pointings
-            # in a mini survey, so this will show you what the pointings
-            # are if this happens
-            fig = plt.figure()
-            ax = Axes3D(fig)
-            pointings = np.array(pointings)
-            phis = pointings[:,0]
-            thetas = pointings[:,1]
-            ax.scatter(np.cos(phis)*np.cos(thetas),
-                       np.sin(phis)*np.cos(thetas),
-                       np.sin(thetas))
-
-            plt.show()
-
+        # create visitpairs from the calculated pointings
         visitPairs = [VisitPair(pointing[0], pointing[1], rotation)
                       for pointing in pointings]
 
         return set(visitPairs)
-        
 
     @classmethod
     def _generateRandomPointings(self, telescope):
@@ -111,6 +137,13 @@ class MiniSurvey:
 
     @classmethod
     def _realGeneratePointings(self, telescope):
+        """ Tiles the sky with a 2-raft-overlap pattern
+
+        Or rather, the tiling has 2 rafts of overlap in flat space. Turns
+        out that after projecting onto the sphere, this isn't really the
+        case any more. Fortunately, since we do large-scale full-tiling
+        dithering, the exact tiling doesn't matter all that much.
+        """
         # to generate the pointings, start with the pointing pattern in flat
         # space, then map the pattern onto a quadrilateralized spherical cube
 
@@ -127,7 +160,14 @@ class MiniSurvey:
         # removed from the corners
 
         # I'm guessing there's a better way to do this, but here goes...
-        raftWidth = telescope.raftWidth * 0.97
+
+        ### TODO XXX IMPORTANT XXX TODO ###
+        ### multiplying `raftWidth` by some float near 1 is a hacky way
+        ### to change the spacing of the tiling. A way that allows
+        ### the user to choose, say, the number of pointings/steradian
+        ### would be better but this works
+        ### TODO XXX IMPORTANT XXX TODO ###
+        raftWidth = telescope.raftWidth * 0.98
 
         cubeSideLength = np.arccos(1/3) # in radians
         numRaftsPerCubeSide = int(cubeSideLength / raftWidth)
@@ -229,89 +269,4 @@ class MiniSurvey:
         # and convert back to radians
         pointings = np.radians(pointings)
 
-        # offset by the amount in the arguments
-        # TODO no longer doing this
-        #pointings[:,0] += raOffset
-        #pointings[:,1] += decOffset
-
-        #plt.scatter(pointings[:,0],pointings[:,1])
-        #plt.show()
-        #exit()
-
-
-        #print "RA: (",min(pointings[:,0]),",",max(pointings[:,0]),")"
-        #print "DEC:(",min(pointings[:,1]),",",max(pointings[:,1]),")"
-
         return pointings
-
-        """
-        cubeFaceLowerLeftCorners = np.array([[1,2], [0,1], [1,1], 
-                                             [2,1], [3,1], [1,0]])
-        cubeFaceUpperRightCorners = cubeFaceLowerLeftCorners + 1
-
-        cubeFaceLowerLeftCorners *= numRaftsPerCubeSide
-        cubeFaceUpperRightCorners *= numRaftsPerCubeSide
-
-        # add 6 rafts to u and v avoid the edges
-        cubeFaceLowerLeftCorners += 6
-        cubeFaceUpperRightCorners += 6
-
-        thetas = []
-        phis = []
-        for pointing in pointings:
-            (u, v) = pointing
-            face = -1
-            for i in range(6):
-                if (np.all(pointing > cubeFaceLowerLeftCorners[i]) and
-                    np.all(pointing < cubeFaceUpperRightCorners[i])):
-                    face = i
-
-            if 1 <= face <= 4:
-                mu = np.arctan(v / np.sqrt(numRaftsPerCubeSide**2+u**2))
-                # use (face-2) so face2 gets the point (mu, nu) = (0,0)
-                # TODO center it to minimize distortion in the actual minisurvey
-                # area and maybe dither randomly
-                nu = np.arctan(u / numRaftsPerCubeSide) + (face - 2) * np.pi/2
-
-            elif face == 0:
-                mu = np.arctan(numRaftsPerCubeSide / np.sqrt(u**2+v**2))
-                nu = np.arctan2(u, -v)
-
-            elif face == 5:
-                mu = -np.arctan(numRaftsPerCubeSide / np.sqrt(u**2+v**2))
-                nu = np.arctan2(-u, v)
-
-            else:
-                # this pointing doesn't fall within the cube
-                continue
-
-            if face != 5:
-                continue
-
-            t = np.pi / 12 * np.tan(mu)
-            theta = np.arctan(np.sin(t) / (np.cos(t) - (1 / np.sqrt(2))))
-            cosphi = ( (1 - np.cos(mu)**2 * np.tan(nu)**2) *
-                       (1 - np.cos(np.arctan(1/np.cos(theta)))) )
-            phi = np.arccos(cosphi)
-            
-            thetas.append(theta)
-            phis.append(phi)
-
-        fig = plt.figure()
-        ax = Axes3D(fig)
-        ax.scatter(np.cos(thetas)*np.cos(phis), 
-                   np.sin(thetas)*np.cos(phis), 
-                   np.sin(phis))
-        plt.show()
-        
-        pointings *= Telescope.raftWidth
-        
-        ra += raOffset
-        dec += decOffset
-
-        visitPairs = []
-        for i in range(len(ra)):
-            visitPairs.append(VisitPair(self, ra[i], dec[i]))
-
-        return pointings
-        """

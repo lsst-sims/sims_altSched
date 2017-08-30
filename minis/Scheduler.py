@@ -34,6 +34,21 @@ class Scheduler:
         self.EVisitsComplete = 0
 
     def scheduleNight(self, nightNum):
+        """ Schedules the `nightNum`th night
+
+        This generator decides which direction to point on the requested night,
+        instantiates a NightScheduler, and runs the NightScheduler.
+
+        Parameters
+        ----------
+        nightNum : int
+            The index of the night to be scheduled
+
+        Yields
+        ------
+        Each Visit as it is scheduled, or None when there are no Visits
+        currently ready to be scheduled.
+        """
         # decide which way to point tonight
         NCoverage = self.NVisitsComplete / Utils.areaInDir(NORTH)
         SCoverage = self.SVisitsComplete / Utils.areaInDir(SOUTH)
@@ -87,6 +102,22 @@ class Scheduler:
             yield visit
 
     def notifyVisitComplete(self, visit, time):
+        """ Method used to notify us that a Visit was carried out
+
+        This should be called every time the telescope carries out
+        a Visit.
+
+        Parameters
+        ----------
+        visit : altSched.Visit
+            The visit that was executed
+        time : float
+            The unix timestamp at which the visit was executed
+
+        Raises
+        ------
+        TypeError, RuntimeError
+        """
         if not isinstance(visit, Visit):
             raise TypeError("must pass in Visit() instance")
 
@@ -127,6 +158,10 @@ class Scheduler:
                                    " is in unknown direction")
 
     def notifyNightEnd(self):
+        """ Method used to notify us that the night is over
+
+        Should be called at the end of every night.
+        """
         # TODO sometimes a night has only one slew that's a filter change slew time
         # which screws up the average slew time calculation
         if len(self.tonightsSlewTimes) < 2:
@@ -136,4 +171,14 @@ class Scheduler:
         self.makeupVPs.update(newMakeups)
 
     def notifyDomeClosed(self, timeClosed):
+        """ Method used to notify us that the dome just closed
+
+        See comment in NightScheduler.notifyDomeClosed for information about
+        this design choice.
+
+        Parameters
+        ----------
+        timeClosed : float
+            The number of seconds that the dome was closed for
+        """
         self.nightScheduler.notifyDomeClosed(timeClosed)
