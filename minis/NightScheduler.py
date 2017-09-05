@@ -272,7 +272,7 @@ class NightScheduler:
                 yield visitPair.visit2
 
 
-    def notifyDomeClosed(self, timeClosed):
+    def notifyDomeClosed(self, durationClosed):
         """ Method used to notify us that the dome just closed
 
         This method should be called every time the dome is closed
@@ -285,12 +285,12 @@ class NightScheduler:
 
         Parameters
         ----------
-        timeClosed : float
+        durationClosed : float
             The number of seconds that the dome was closed for
         """
         # wasDomeJustClosed is an interrupt flag for schedule
         self.wasDomeJustClosed = True
-        self.domeClosedDuration = timeClosed
+        self.domeClosedDuration = durationClosed
 
     def notifyVisitPairComplete(self, visitPair):
         """ Method used to notify us that a VisitPair was carried out

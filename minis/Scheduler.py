@@ -170,7 +170,7 @@ class Scheduler:
         newMakeups = self.nightScheduler.notifyNightEnd(avgSlew)
         self.makeupVPs.update(newMakeups)
 
-    def notifyDomeClosed(self, timeClosed):
+    def notifyDomeClosed(self, durationClosed):
         """ Method used to notify us that the dome just closed
 
         See comment in NightScheduler.notifyDomeClosed for information about
@@ -178,7 +178,7 @@ class Scheduler:
 
         Parameters
         ----------
-        timeClosed : float
+        durationClosed : float
             The number of seconds that the dome was closed for
         """
-        self.nightScheduler.notifyDomeClosed(timeClosed)
+        self.nightScheduler.notifyDomeClosed(durationClosed)
