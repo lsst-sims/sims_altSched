@@ -113,7 +113,7 @@ class Simulator:
         # write the header to the output file if writeCsv flag is set
         if writeCsv:
             self.outFile = open("results/" + runName + "/" + runName + ".csv", "w")
-            self.outFile.write("time,prop,ra,dec,filter\n")
+            self.outFile.write("mjd,prop,ra,dec,filter\n")
 
         # these variables keep track of wasted time
         self.fieldsRisingWasteTime = 0
