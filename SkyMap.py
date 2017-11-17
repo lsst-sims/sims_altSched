@@ -178,6 +178,7 @@ class SkyMap:
         # this was about 20x slower (for resScale=5) )
 
         # candidate pix must be within 2 degrees of visit dec
+        # TODO this should be half of Telescope.fov, no?
         deltaDec = np.radians(2)
         minDec = max(visit.dec - deltaDec, -np.pi/2)
         maxDec = min(visit.dec + deltaDec, np.pi/2)
@@ -191,8 +192,11 @@ class SkyMap:
         # candidate pix must be within 2 degrees of visit ra normalized
         # by cos(dec) to avoid cutting off near poles
         # np.max to prevent div by 0
+        # TODO also Telescope.fov/2
         deltaRa = np.radians(2) / max(np.cos(candidateDecs).max(), 0.001)
         
+        # TODO this is going to kill valid RAs near the poles
+        # should just special case if near poles include a spherical cap
         raRange = ((visit.ra - deltaRa) % (2*np.pi), 
                    (visit.ra + deltaRa) % (2*np.pi))
         withinRange = utils.areRasInRange(candidateRas, raRange)
@@ -204,6 +208,9 @@ class SkyMap:
         # i.e. project candidateSkyPix onto the plane tangent to the unit
         # sphere at the altaz of (visit.ra, visit.dec)
 
+        # TODO I don't think we actually need to convert to alt/az here
+        # could be big speedup but need to be more careful about parallactic
+        # angle below
         visitAlt, visitAz = sky.radec2altaz(visit.ra, visit.dec, time)
         candidateAlt, candidateAz = \
                 sky.radec2altaz(candidateSkyPix[:,0], candidateSkyPix[:,1], time)
