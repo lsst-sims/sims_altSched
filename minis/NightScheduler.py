@@ -46,6 +46,26 @@ class NightScheduler:
         self.domeClosedDuration = 0
 
 
+    def _isDDVisitInRevisitGroup(self, revisitGroup):
+        # helper to check if a DD visit falls within the min/max
+        # RA range of a revisit group
+        scan1 = revisitGroup["scan1"]
+        scan2 = revisitGroup["scan2"]
+        if len(scan1) == 0 and len(scan2) == 0:
+                return False
+        ras = np.array([vp.ra for vp in revisitGroup["scan1"]] +
+                       [vp.ra for vp in revisitGroup["scan2"]])
+        if ras.max() - ras.min() > np.pi:
+            # scans are never > 180 degrees in ra, so if true, the scan
+            # must cross the 2pi boundary
+            maxRa = ((ras + np.pi) % (2*np.pi)).max() - np.pi
+            minRa = ((ras + np.pi) % (2*np.pi)).min() - np.pi
+        else:
+            maxRa = ras.max()
+            minRa = ras.min()
+        return utils.isRaInRange(self.DDVisit.ra, (minRa, maxRa))
+
+
     def schedule(self):
         """ Schedule the night
 
@@ -80,25 +100,6 @@ class NightScheduler:
             self.DDVisit = self._getTonightsDD()
         else:
             self.DDVisit = None
-
-        # helper for later to check if a DD visit falls within the min/max
-        # RA range of a revisit group
-        def isDDVisitInRevisitGroup(revisitGroup):
-            scan1 = revisitGroup["scan1"]
-            scan2 = revisitGroup["scan2"]
-            if len(scan1) == 0 and len(scan2) == 0:
-                    return False
-            ras = np.array([vp.ra for vp in revisitGroup["scan1"]] +
-                           [vp.ra for vp in revisitGroup["scan2"]])
-            if ras.max() - ras.min() > np.pi:
-                # scans are never > 180 degrees in ra, so if true, the scan
-                # must cross the 2pi boundary
-                maxRa = ((ras + np.pi) % (2*np.pi)).max() - np.pi
-                minRa = ((ras + np.pi) % (2*np.pi)).min() - np.pi
-            else:
-                maxRa = ras.max()
-                minRa = ras.min()
-            return utils.isRaInRange(self.DDVisit.ra, (minRa, maxRa))
 
         # figure out how many visits we'll probably do tonight
         nightLength = sky.nightLength(config.surveyStartTime, self.nightNum)
@@ -232,7 +233,7 @@ class NightScheduler:
             # the maxRa of one revisitGroup and the minRa of the next
             # we should really calculate the minimum ra_{meridian} - ra_{dd}
             # over all times between revisit groups and execute it there
-            if self.DDVisit is not None and isDDVisitInRevisitGroup(rg):
+            if self.DDVisit is not None and self._isDDVisitInRevisitGroup(rg):
                 yield self.DDVisit
                 # we don't keep track of whether the DD visit was actually
                 # executed, so just indicate that we scheduled it
@@ -777,7 +778,7 @@ class NightScheduler:
                 # add to cumTime if we know we'll schedule the DD visit
                 # after this revisit group
                 if (self.DDVisit is not None and
-                        isDDVisitInRevisitGroup(ERevisitGroup)):
+                        self._isDDVisitInRevisitGroup(ERevisitGroup)):
                     # TODO this doesn't include the slew time to/from
                     # the DD field
                     cumTime += self.DDVisit.expTime
@@ -792,7 +793,7 @@ class NightScheduler:
             # add to cumTime if we know we'll schedule the DD visit after
             # this revisit group
             if (self.DDVisit is not None and
-                    isDDVisitInRevisitGroup(SRevisitGroup)):
+                    self._isDDVisitInRevisitGroup(SRevisitGroup)):
                 # TODO this ignores the slew time to/from the DD field
                 cumTime += self.DDVisit.expTime
             revisitGroups.append(SRevisitGroup)
