@@ -40,6 +40,11 @@ zenithBuffer = 2 * tel.fovWidth
 # in RA so that you avoid the zenith avoidance zone
 zenithBufferOffset = 4 * tel.fovWidth
 
+# density of the tiling in units of pointings / steradian
+# this may be the approximate value depending on whether the Tiling
+# subclass can achieve arbitrary densities or not (e.g. ThomsonTiling can't)
+tilingDensity = (1 / 12) * (180/np.pi)**2
+
 # don't observe when the cloud is more than maxCloudCover cloudy
 maxCloudCover = 0.7
 
