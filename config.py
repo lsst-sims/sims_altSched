@@ -58,17 +58,21 @@ moonGMaxAlt = np.radians(20)
 moonGMaxPhase = 0.6
 
 # whether or not to include deep drilling fields
-useDD = False
+useDD = True
 
 # number of seconds of exposure time for DD visits
 DDExpTime = 60 * 60
 
-# number of seconds of exposure time for WFD visits
+# total number of seconds of exposure time for WFD visits
+# so 2 15 second exposures would correspond to 30 here
 WFDExpTime = 30
+
+# number of exposures that are taken per visit
+numExposures = 2
 
 # number of seconds of overhead needed per visit
 # (shutter and potentially intermediate readout times)
-visitOverheadTime = 4
+visitOverheadTime = (numExposures - 1) * 3 + 1
 
 # whether to use the "relaxed" dome model in the sims.speedObservatory
 # telescope model
