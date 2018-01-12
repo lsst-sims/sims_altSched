@@ -84,6 +84,24 @@ def twoFChangesNightOver(direction):
     # also update the left-out filter
     _leftOutFilters[direction] = _inc(_leftOutFilters[direction])
 
+def zeroFChanges(nightNum, direction, nScans):
+    nightStartTime = sky.nightStart(config.surveyStartTime, nightNum)
+    nightEndTime   = sky.nightEnd(  config.surveyStartTime, nightNum)
+    #midnightTime = (nightStartTime + nightEndTime) / 2
+
+    f = _attemptFilter(direction, _startFilters[direction], _inc(_startFilters[direction]))
+    while f in _avoidFilters(nightStartTime) or f in _avoidFilters(nightEndTime):
+        f = _inc(f)
+    fs = [f] * nScans
+
+    # TODO this should go in NightOver, but this reveals inflexibility in
+    # the ...Changes/...NightOver interface
+    _startFilters[direction] = _inc(f)
+    return fs
+
+def zeroFChangesNightOver(direction):
+    _leftOutFilters[direction] = _inc(_leftOutFilters[direction])
+
 
 def maxFChanges(nightNum, direction, nScans):
     """ Returns filters that change between every visit/revisit pair
