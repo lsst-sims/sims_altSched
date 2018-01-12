@@ -122,3 +122,12 @@ def spherical2Cartesian(phi, theta):
         return np.vstack([x, y, z]).T
     else:
         return [x, y, z]
+
+def cartesian2Spherical(x, y, z):
+    phi = np.arctan2(y, x) + np.pi
+    theta = np.arctan2(np.sqrt(x**2+y**2), z) - np.pi/2
+
+    if isinstance(z, np.ndarray):
+        return np.vstack([phi, theta]).T
+    else:
+        return [phi, theta]
