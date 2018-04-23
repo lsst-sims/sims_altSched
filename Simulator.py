@@ -253,7 +253,7 @@ class Simulator:
                 prevI = i
                 # save each frame if the saveMovie flag is set
                 if saveMovie:
-                    self.display.saveFrame(movieDir + "/%07d.png" % i)
+                    self.display.saveFrame(movieDir + "/%04d%04d.png" % (nightNum, i))
 
         # the night is over
 
@@ -435,6 +435,7 @@ def runDefaultSim():
     sim = Simulator()
     # use a telescope with default parameters
     tel = Telescope()
+
     # make the results directory if necessary
     if not os.path.isdir("results/" + runName):
         os.mkdir("results/" + runName)
