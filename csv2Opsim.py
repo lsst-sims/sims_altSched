@@ -12,7 +12,7 @@ import sqlite3
 
 from lsst.sims.speedObservatory import sky, utils
 from lsst.sims.speedObservatory import Telescope
-#from lsst.sims.skybrightness import SkyModel
+from lsst.sims.skybrightness import SkyModel
 from lsst.sims.skybrightness_pre import SkyModelPre
 from lsst.sims.utils import raDec2Hpid
 from lsst.sims.utils import m5_flat_sed
@@ -88,8 +88,8 @@ inDtype = list(zip(names, types))
 inData = np.array(inData, dtype=np.dtype(inDtype))
 nRows = inData.shape[0]
 
-inputType = "opsim"
-assert(inputType == "alt-sched" or inputType == "opsim")
+inputType = "alt-sched"
+assert(inputType in ["alt-sched", "opsim", "feature"])
 print("Using input type {}".format(inputType))
 
 if inputType == "alt-sched":
@@ -98,9 +98,12 @@ if inputType == "alt-sched":
     propVisitTimes = [config.WFDExpTime + config.visitOverheadTime,
                       config.DDExpTime]
     propVisitExpTimes = [config.WFDExpTime, config.DDExpTime]
+
+    propVisitTimes = [34, 3600]
+    propVisitExpTimes = [30, 3600]
     propNames = ["WideFastDeep", "Deep Drilling"]
 
-elif inputType == "opsim":
+elif inputType == "opsim" or inputType == "feature":
     # all types of visits in opsim are 30 + 4 seconds
     props = ["wfd", "dd", "gal", "ecl", "scp"]
     propVisitTimes = [34] * 5
@@ -233,6 +236,8 @@ with Timer("night_check") as t:
     timeBuffer = 1800
     if inputType == "alt-sched":
         startTime = config.surveyStartTime
+    elif inputType == "feature":
+        startTime = config.surveyStartTime - 3600*24
     elif inputType == "opsim":
         startTime = 1664500000
         #startTime = 1664582400 # for astro-lsst
@@ -327,7 +332,7 @@ with Timer("azimuth") as t:
 
 ### numExposures ###
 with Timer("numExposures") as t:
-    outData["numExposures"] = config.numExposures
+    outData["numExposures"] = 1 # XXX config.numExposures
 
 
 ### visitTime ###
@@ -351,7 +356,7 @@ with Timer("airmass") as t:
     outData["airmass"] = 1 / np.sin(alt)
 
 
-
+"""
 ### skyBrightness ###
 # this takes about 1000 secs (with files on SSD)
 with Timer("skyBrightness") as t:
@@ -379,15 +384,21 @@ with Timer("skyBrightness") as t:
 with Timer("skyBrightness") as t:
     skyModel = SkyModel(mags=True)
     for i, inDatum in enumerate(inData):
-        skyModel.setRaDecAltAzMjd(np.array([inDatum["ra"]]),
-                                  np.array([inDatum["dec"]]),
-                                  np.array([np.radians(outData["altitude"][i])]),
-                                  np.array([np.radians(outData["azimuth"][i])]),
-                                  inDatum["mjd"])
+        try:
+            skyModel.setRaDecAltAzMjd(np.array([inDatum["ra"]]),
+                                      np.array([inDatum["dec"]]),
+                                      np.array([np.radians(outData["altitude"][i])]),
+                                      np.array([np.radians(outData["azimuth"][i])]),
+                                      inDatum["mjd"])
+        except BaseException as e:
+            print("Exception when evaluating sky model:")
+            print(e)
+            print(inDatum["ra"], inDatum["dec"], inDatum["mjd"], outData["altitude"][i], outData["azimuth"][i])
+            raise e
         
         outData["skyBrightness"][i] = skyModel.returnMags()[inDatum["filter"]]
         print("Progress:", "{:3.4f}%   ".format(i / nRows * 100), end="\r")
-"""
+
 
 ### cloud ###
 deltaTs = utils.mjd2unix(inData["mjd"]) - config.surveyStartTime
@@ -559,7 +570,6 @@ with Timer("slewDistance") as t:
 # rotSkyPos (float, units=degrees)
 
 #######################################3
-exit()
 
 # now output to database
 conn = sqlite3.connect(outFilename)
