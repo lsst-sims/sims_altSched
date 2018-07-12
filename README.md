@@ -13,7 +13,12 @@ in the sims\_ocs code that throws an error when you try to run sims\_altSched.
 ## Optional Dependencies
 1. pygame: pygame is not in the LSST stack and is only needed for visualizing
 the scheduler as it runs. The visualization is very useful, but you can still
-generate schedules using this code without pygame installed.
+generate schedules using this code without pygame installed. You can install
+pygame even on a read-only stack installation by running
+```
+pip install --user pygame
+```
+after loading the LSST environment.
 
 # Running
 First, read through the configuration flags/variables located at the top of
