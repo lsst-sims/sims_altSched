@@ -17,8 +17,8 @@ from lsst.sims.skybrightness_pre import SkyModelPre
 from lsst.sims.utils import raDec2Hpid
 from lsst.sims.utils import m5_flat_sed
 from lsst.sims.ocs.kernel.time_handler import TimeHandler
-from lsst.sims.ocs.environment.cloud_model import CloudModel
-from lsst.sims.ocs.environment.seeing_model import SeeingModel
+from lsst.sims.ocs.environment import CloudInterface
+from lsst.sims.ocs.environment import SeeingInterface
 from lsst.sims.ocs.configuration.instrument import Filters
 from lsst.sims.ocs.configuration import Environment
 import config
@@ -407,25 +407,27 @@ with Timer("cloud") as t:
     dateFormat = "%Y-%m-%d"
     startDatetime = datetime.utcfromtimestamp(config.surveyStartTime)
     timeHandler = TimeHandler(datetime.strftime(startDatetime, dateFormat))
-    cloudModel = CloudModel(timeHandler)
+    cloudInterface = CloudInterface(timeHandler)
     # load the cloud database
-    cloudModel.initialize()
-    cloudCover = [cloudModel.get_cloud(deltaT) for deltaT in deltaTs]
+    cloudInterface.initialize()
+    cloudCover = [cloudInterface.get_cloud(deltaT) for deltaT in deltaTs]
     outData["cloud"] = cloudCover
 
 
 ### seeingFwhm500 ###
 with Timer("seeingFwhm500") as t:
-    seeingModel = SeeingModel(timeHandler)
+    seeingInterface = SeeingInterface(timeHandler)
     environment = Environment()
     filters = Filters()
-    seeingModel.initialize(environment, filters)
+    seeingInterface.initialize(environment, filters)
     fwhm500s = np.zeros(nRows)
     fwhmGeoms = np.zeros(nRows)
     fwhmEffs = np.zeros(nRows)
     for i, deltaT, f, airmass in zip(np.arange(nRows), deltaTs,
                                      inData["filter"], outData["airmass"]):
-        fwhm500, fwhmGeom, fwhmEff = seeingModel.calculate_seeing(deltaT, f, airmass)
+        fwhm500, fwhmGeom, fwhmEff = seeingInterface.calculate_seeing(
+                deltaT, f, airmass
+            )
         fwhm500s[i] = fwhm500
         fwhmGeoms[i] = fwhmGeom
         fwhmEffs[i] = fwhmEff
