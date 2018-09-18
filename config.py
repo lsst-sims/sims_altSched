@@ -6,6 +6,7 @@ from lsst.sims.speedObservatory import Telescope
 
 # number of nights to run the simulation for
 surveyNumNights = 365 * 10
+#surveyNumNights = 11
 
 # start time of the survey as a unix timestamp
 # this is january 1 2022 at midnight
@@ -13,8 +14,13 @@ surveyStartTime = 1640995200
 
 # minimum and maximum declinations to observe at
 # -90 to 13 gets about equal area in the North and Southeast
-maxDec = np.radians(13)
+#
+maxDec = np.radians(3.)
 minDec = np.radians(-90)
+
+#try an extended survey
+#maxDec = np.radians(18)
+#minDec = np.radians(-90)
 
 # -75 to 15 is minion_1020 (pan-starrs like)
 #maxDec = np.radians(15)
@@ -26,7 +32,8 @@ minDec = np.radians(-90)
 
 # Approximate width in RA of scans in the zenith dec band
 # 30 degrees seems reasonable
-EScanWidth = np.radians(30)
+EScanWidth = np.radians(40)
+#EScanWidth = np.radians(40)
 
 # buffer zone near the zenith to the N/S/E 
 # TODO these probably shouldn't change, so maybe shouldn't be config vars
@@ -59,9 +66,7 @@ moonGMaxPhase = 0.6
 
 # whether or not to include deep drilling fields
 useDD = True
-
-# number of seconds of exposure time for DD visits
-DDExpTime = 60 * 60
+DDExpTime=30
 
 # total number of seconds of exposure time for WFD visits
 # so 2 15 second exposures would correspond to 30 here
