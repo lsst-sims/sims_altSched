@@ -10,10 +10,14 @@ from Visit import Visit
 from Visit import VisitPair
 import utils
 from minis.NightScheduler import NightScheduler
+from lsst.sims.speedObservatory.utils import unix2mjd
 
 from matplotlib import pyplot as plt
 import copy
 import csv
+
+#Ph.G
+from DDF import *
 
 class Scheduler:
     def __init__(self, telescope, context):
@@ -26,13 +30,15 @@ class Scheduler:
         # so we can update our estimate of the average slew time each night
         self.tonightsSlewTimes = []
 
-
-
         # keep track of how many visits have been executed in each direction
         self.SVisitsComplete = 0
         self.NVisitsComplete = 0
         self.EVisitsComplete = 0
 
+    
+        # Loading DD configuration (once for all at the beginning of the survey)
+        self.DD=Load_DD('ddFields_new.txt',telescope)
+        
     def scheduleNight(self, nightNum):
         """ Schedules the `nightNum`th night
 
@@ -67,12 +73,23 @@ class Scheduler:
         prevFilter = self.telescope.filters[0]
 
         # return each visit prescribed by tonight's NightScheduler
+        #self.nightScheduler = NightScheduler(self.telescope, nightNum,
+        #                                     self.nightDirection, self.makeupVPs)
         self.nightScheduler = NightScheduler(self.telescope, nightNum,
-                                             self.nightDirection, self.makeupVPs)
+                                             self.nightDirection, self.makeupVPs,self.DD)
         prevTime = None
         for visit in self.nightScheduler.schedule():
             time = self.context.time()
+           
             alt, az = sky.radec2altaz(visit.ra, visit.dec, self.context.time())
+
+            if self.nightScheduler.DDVisit is not None:
+                diff_time=time-self.nightScheduler.DDVisit.time_obs
+                if diff_time >=0 and np.abs(diff_time)<60. :
+                #observe DDF now
+                    for visit_dd in self.nightScheduler.schedule_DD():
+                        yield visit_dd
+
             if alt < self.telescope.minAlt:
                 # East is +pi/2, so if the field has az < pi, it is rising
                 # and if az > pi then setting
@@ -122,6 +139,7 @@ class Scheduler:
             raise TypeError("must pass in Visit() instance")
 
         if visit.isComplete:
+            print(time,visit.ra,visit.dec,visit.filter,visit.expTime,visit.isComplete)
             raise RuntimeError("visit was completed twice")
 
         visit.isComplete = True

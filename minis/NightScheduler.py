@@ -10,14 +10,16 @@ from Visit import PROP_WFD, PROP_DD
 from minis import filtersequence
 
 from lsst.sims.speedObservatory import sky
+from lsst.sims.speedObservatory.utils import unix2mjd
 
 import csv
 import numpy as np
+import numpy.lib.recfunctions as rf
 
 # initial estimates of slew time (updated after the first night)
 _estAvgSlewTimes = {NORTH: 10,
                     SOUTHEAST: 10}
-
+"""
 # read in DD field centers
 _ddFieldCenters = []
 with open("ddFields.csv", "r") as ddFile:
@@ -26,7 +28,7 @@ with open("ddFields.csv", "r") as ddFile:
         ra = float(field["ra"])
         dec = float(field["dec"])
         _ddFieldCenters.append((ra, dec))
-
+"""
 
 class NightScheduler:
     """ Class that schedules a single night
@@ -35,7 +37,7 @@ class NightScheduler:
     must be called at the appropriate times as well. See comment in schedule()
     for information on how the NightScheduler schedules.
     """
-    def __init__(self, telescope, nightNum, direction, makeupVPs):
+    def __init__(self, telescope, nightNum, direction, makeupVPs,DD):
         self.telescope = telescope
         self.nightNum = nightNum
         self.direction = direction
@@ -45,7 +47,15 @@ class NightScheduler:
         self.wasDomeJustClosed = False
         self.domeClosedDuration = 0
 
+        self.DD=DD
+        # figure out what DD visit we're going to do tonight
+        
+        if config.useDD:
+            self.DDVisit = self._getTonightsDD()
+        else:
+            self.DDVisit = None
 
+        
     def _isDDVisitInRevisitGroup(self, revisitGroup):
         # helper to check if a DD visit falls within the min/max
         # RA range of a revisit group
@@ -63,7 +73,7 @@ class NightScheduler:
         else:
             maxRa = ras.max()
             minRa = ras.min()
-        return utils.isRaInRange(self.DDVisit.ra, (minRa, maxRa))
+        return utils.isRaInRange(self.DDVisit['ra'], (minRa, maxRa))
 
 
     def schedule(self):
@@ -94,12 +104,7 @@ class NightScheduler:
         """
         # this will hold the VPs in tonight's mini survey
         self.tonightsMini = None
-
-        # figure out what DD visit we're going to do tonight
-        if config.useDD:
-            self.DDVisit = self._getTonightsDD()
-        else:
-            self.DDVisit = None
+       
 
         # figure out how many visits we'll probably do tonight
         nightLength = sky.nightLength(config.surveyStartTime, self.nightNum)
@@ -114,7 +119,9 @@ class NightScheduler:
             # we do plan to do a DD visit tonight, so the amount of time
             # available for WFD exposures is nightLength - DDexpTime
             # TODO this doesn't include slew time to/from the DD field
-            expectedNumVisits = int((nightLength - self.DDVisit.expTime) / t)
+            expTime=self.DDVisit.sequences[self.DDVisit.current_sequence].TotExpTime
+            
+            expectedNumVisits = int((nightLength - expTime) / t)
 
         # TODO it might be greater than numVisits / 2 if we expect to
         # lose revisits due to weather. May model this at some point
@@ -160,7 +167,10 @@ class NightScheduler:
         # how much observing time we would have accomplished during the rest
         # of that revisitgroup
         numVisitsKilled = 0
+        
+        
         while rgIdx < len(revisitGroups):
+            
             rg = revisitGroups[rgIdx]
             rgIdx += 1
             # perform scan1 and scan2 twice in a row but use
@@ -170,6 +180,7 @@ class NightScheduler:
                     (1, rg["scan2"], rg["scanDir2"], rg["filter2"]),
                     (2, rg["scan1"], rg["scanDir1"], rg["filter3"]),
                     (3, rg["scan2"], rg["scanDir2"], rg["filter4"])]:
+                
                 if scanDir == NORTH:
                     sortedScan = sorted(scan, key=lambda v: v.dec)
                 elif scanDir == SOUTH:
@@ -184,7 +195,7 @@ class NightScheduler:
                     sortedScan = sorted(scan, key=lambda v: -1 * (v.ra - raMin) % (2*np.pi))
                 else:
                     raise RuntimeError("invalid direction " + str(scanDir))
-
+                
                 for visit in self._schedulePath(sortedScan, filt):
                     # _schedulPath returns before yielding a stale visit
                     # due to a closed dome. So if it returns a visit, we
@@ -225,21 +236,18 @@ class NightScheduler:
                 # flag
                 self.wasDomeJustClosed = False
 
-            # figure out whether we need to add a DD visit now between
-            # revisitGroups. If self.DDVisit is None, we've already completed
-            # the visit (or there was none to begin with)
-
-            # TODO this will miss the DD if it happens to fall exactly between
-            # the maxRa of one revisitGroup and the minRa of the next
-            # we should really calculate the minimum ra_{meridian} - ra_{dd}
-            # over all times between revisit groups and execute it there
-            if self.DDVisit is not None and self._isDDVisitInRevisitGroup(rg):
-                yield self.DDVisit
-                # we don't keep track of whether the DD visit was actually
-                # executed, so just indicate that we scheduled it
-                self.DDVisit = None
-
-
+    def schedule_DD(self):
+        """ Schedule DD visits """
+        
+        ra=self.DDVisit.ra
+        dec=self.DDVisit.dec
+        current_sequence=self.DDVisit.current_sequence
+        for visit in self.DDVisit.sequences[current_sequence].Visits(ra,dec):
+            yield visit
+            
+        self.DDVisit.last_night=self.nightNum
+        self.DDVisit.last_sequence=current_sequence
+        
     def _schedulePath(self, path, filt):
         """ Schedules a list of pointings
 
@@ -356,7 +364,7 @@ class NightScheduler:
         return (_estAvgSlewTimes[self.direction] +
                 config.WFDExpTime +
                 config.visitOverheadTime)
-
+    
     def _getTonightsDD(self):
         """ Decides which DD field to observe for tonight
 
@@ -370,12 +378,21 @@ class NightScheduler:
         maxRa = sky.raOfMeridian(nightEnd)
 
         # loop through all DD fields to see which one we can observe tonight
-        for ra, dec in _ddFieldCenters:
-            # check if the night will end before we could finish
-            # the DD exposure
-            # raBuffer is how far the sky will move during the exposure
-            raBuffer = config.DDExpTime / (24*3600) * 2*np.pi
 
+        DDF_tonight=[]
+        
+        r=[]
+    
+        for dd in self.DD:
+            #print('candidate',dd)
+            ra = dd.ra
+            dec = dd.dec
+            dd.current_sequence=dd.last_sequence+1
+            if dd.current_sequence >= dd.nseq:
+                dd.current_sequence = 0
+            exptime=dd.sequences[dd.current_sequence].TotExpTime
+
+            raBuffer = exptime / (24*3600) * 2*np.pi
             DDDirection = utils.directionOfDec(dec)
 
             if DDDirection == NORTH:
@@ -391,13 +408,52 @@ class NightScheduler:
                 inRaRange = utils.isRaInRange(ra, raRange)
                 DDDirection = SOUTHEAST
 
-            # the DD ra must be less than maxRa - raBuffer so that
-            # the night doesn't end while the DD exposure is happening
-            if inRaRange and DDDirection == self.direction:
-                return Visit(PROP_DD, None, ra, dec, 0, config.DDExpTime, 'u')
+            
+            if not inRaRange :
+                continue
+        
+             
+            night_last=dd.last_night
+            
+            #do not take into accoun fields that were observed recently (2 days ago)
+           
+            if night_last == -1 or self.nightNum-night_last > 2:
+                th_min,th_max,ha,time_obs=utils._getTime_obs(ra,dec,exptime,self.telescope,nightStart,nightEnd)
+                dd.time_obs=time_obs
+                dd.ha=ha
+                DDF_tonight.append(dd)
 
-        # if no suitable DD field was found, return None
-        return None
+        if len(DDF_tonight) > 0:
+            #among the selected, if there are fields not observed (yet) ie last_night=-1 : should be priority
+            list_priority=[]
+            for dd in DDF_tonight:
+                #print('selected',dd)
+                if dd.last_night == -1:
+                    list_priority.append(dd)
+
+            if len(list_priority) > 0:
+                DDF_tonight= list_priority
+                
+            if len(DDF_tonight) > 1 :
+                r=[]
+                for i,dd in enumerate(DDF_tonight):
+                    r.append((i,dd.last_night,dd.ha))
+                tab=np.rec.fromrecords(r,names=['index','last_night','ha'])
+                """
+                idv = tab['last_night'] == np.min(tab['last_night'])
+                sel_visit=tab[idv]
+                if len(sel_visit) > 1:
+                """
+                min_ha=np.argmin(tab['ha'])
+                return DDF_tonight[np.asscalar(tab[min_ha]['index'])]
+                """
+                else:
+                    return DDF_tonight[np.asscalar(sel_visit['index'])]
+                """
+            else:
+                return DDF_tonight[0]
+        else:
+            return None
 
     def _getTonightsRaRange(self):
         twilStart = sky.twilStart(config.surveyStartTime, self.nightNum)
@@ -775,13 +831,6 @@ class NightScheduler:
                                  len(ERevisitGroup["scan2"]))
                 cumTime += 2 * ENumNewVisits * avgVisitTime
 
-                # add to cumTime if we know we'll schedule the DD visit
-                # after this revisit group
-                if (self.DDVisit is not None and
-                        self._isDDVisitInRevisitGroup(ERevisitGroup)):
-                    # TODO this doesn't include the slew time to/from
-                    # the DD field
-                    cumTime += self.DDVisit.expTime
                 j += 1
             # now add the South scan. Note this assumes that we never need
             # to add two East scans in a row in order to keep out of the
@@ -790,12 +839,14 @@ class NightScheduler:
             # a buildup in one southern scan
             SRevisitGroup = newRevisitGroup(SOUTH)
 
+            """
             # add to cumTime if we know we'll schedule the DD visit after
             # this revisit group
             if (self.DDVisit is not None and
                     self._isDDVisitInRevisitGroup(SRevisitGroup)):
                 # TODO this ignores the slew time to/from the DD field
-                cumTime += self.DDVisit.expTime
+                cumTime += self.DDVisit['TotExpTime']
+            """
             revisitGroups.append(SRevisitGroup)
 
         # we should have added all the East scans by now excepting perhaps one

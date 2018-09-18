@@ -13,13 +13,15 @@ from SkyMap import SkyMap
 import sys
 import os
 from datetime import datetime
+import csv
+import time
 
 from matplotlib import pyplot as plt
 from SummaryPlots import SummaryPlots
 
 from lsst.sims.ocs.kernel.time_handler import TimeHandler
-from lsst.sims.ocs.environment.cloud_model import CloudModel
-
+#from lsst.sims.ocs.environment.cloud_model import CloudModel
+from lsst.sims.ocs.environment.cloud_interface import CloudInterface
 from lsst.sims.speedObservatory.utils import unix2mjd
 
 # flag to control whether a SkyMap instance is used to track how many times
@@ -44,13 +46,13 @@ movieDir = "images/pygame"
 
 # flag to control whether summary plots are displayed after the simulation
 # is complete (whether or not to call _outputSummaryStats())
-showSummaryPlots = True and trackMap
+showSummaryPlots = False and trackMap
 
 # flag to control whether or not to clear the visualization after each night
 clearDisplayNightly = True
 
 # flag to control whether the observation sequence is written to disk
-writeCsv = False
+writeCsv = True
 
 # the resolution of the visualization (using 2x will give 4 times as many pixels
 # as using x)
@@ -58,8 +60,20 @@ resScale = 4
 
 # the name of the run. The csv output is saved to
 # ./results/`runName`/`runName`.csv
-runName = "9013_1vo_maxf_nolax_3set_98"
+#runName = "altsched_test_DD"
+#Ph.G modif
 
+nfields=len(open("ddFields.csv", "r").readlines())-1
+nyears=int(config.surveyNumNights/365)
+runName='altsched_'
+runName+=str(np.degrees(config.minDec))+'_'
+runName+=str(np.degrees(config.maxDec))+'_'
+runName+=str(np.degrees(config.EScanWidth))+'_'
+if config.useDD:
+    runName+='DD_'+str(nfields)+'_'
+runName+=str(nyears)+'yrs'
+
+print('runName',runName)
 class Simulator:
     def time(self):
         """ Get the current simulated time
@@ -85,7 +99,10 @@ class Simulator:
         are in config.py
         """
         self.tel = tel
-
+        """
+        self.tel.minAlt=np.radians(0.0)
+        self.tel.maxAlt=np.radians(90.0)
+        """
         # read in downtime nights TODO use SOCS/speedObservatory for this
         downtimeNights = self._parseDowntime()
 
@@ -97,7 +114,8 @@ class Simulator:
         dateFormat = "%Y-%m-%d"
         startDatetime = datetime.utcfromtimestamp(config.surveyStartTime)
         timeHandler = TimeHandler(datetime.strftime(startDatetime, dateFormat))
-        self.cloudModel = CloudModel(timeHandler)
+        self.cloudModel = CloudInterface(timeHandler)
+        
         # load the cloud database
         self.cloudModel.initialize()
 
@@ -113,7 +131,8 @@ class Simulator:
         # write the header to the output file if writeCsv flag is set
         if writeCsv:
             self.outFile = open("results/" + runName + "/" + runName + ".csv", "w")
-            self.outFile.write("mjd,prop,ra,dec,filter\n")
+            #self.outFile.write("mjd,prop,ra,dec,filter,\n")
+            self.outFile.write("mjd,prop,ra,dec,filter,ha,alt,az,airmass,night\n")
 
         # these variables keep track of wasted time
         self.fieldsRisingWasteTime = 0
@@ -171,7 +190,7 @@ class Simulator:
         for i, visit in enumerate(self.sched.scheduleNight(nightNum)):
             # figure out whether/how we should update the display
             perNight, deltaI = self.getUpdateRate(nightNum, i)
-
+           
             # stop if the night is over
             if self.curTime >= twilEnd:
                 break
@@ -181,6 +200,7 @@ class Simulator:
             cloudCover = self.cloudModel.get_cloud(deltaT)
             timeBeforeDomeClose = self.curTime
             while cloudCover > config.maxCloudCover and self.curTime <= twilEnd:
+                #print('clouds')
                 self.curTime += 600
                 deltaT = self.curTime - config.surveyStartTime
                 cloudCover = self.cloudModel.get_cloud(deltaT)
@@ -197,8 +217,9 @@ class Simulator:
             if visit is not None:
                 alt, az = sky.radec2altaz(visit.ra, visit.dec, self.curTime)
                 # make sure this az is a valid place to look
+                
                 if alt < self.tel.minAlt or alt > self.tel.maxAlt:
-                    print("invalid alt (", np.degrees(alt), "deg) night", nightNum)
+                    print("invalid alt (", np.degrees(alt), "deg) night", nightNum,visit.prop,visit.ra,visit.dec,visit.filter,self.curTime,np.degrees(alt))
                     continue
 
                 # figure out how far we have to slew
@@ -223,12 +244,20 @@ class Simulator:
                 if writeCsv:
                     assert(visit.prop == PROP_WFD or visit.prop == PROP_DD)
                     prop = "wfd" if visit.prop == PROP_WFD else "dd"
+                    lst = sky.unix2lst(self.tel.longitude, self.curTime)
+                    alt, az = sky.radec2altaz(visit.ra, visit.dec, self.curTime)
+                    airmass=1./np.cos(np.pi/2-alt)
                     self.outFile.write(str(unix2mjd(self.curTime)) + "," +
                                        prop + "," +
                                        str(visit.ra) + "," +
                                        str(visit.dec) + "," +
-                                       visit.filter + "\n")
-
+                                       #visit.filter + "\n")
+                                       visit.filter + ","+
+                                       str(lst-visit.ra)+ ","+
+                                       str(alt)+ ","+
+                                       str(az)+ ","+
+                                       str(airmass)+ ","+
+                                       str(nightNum) + "\n")
                 # add the exposure time of this visit to the current time
                 assert(visit.expTime >= 0)
                 self.curTime += visit.expTime
@@ -249,6 +278,7 @@ class Simulator:
             # now that we've added the visit (if there was one),
             # update the display
             if showDisp and not perNight and i - prevI >= deltaI:
+                #time.sleep(0.5)
                 self.display.updateDisplay(self.skyMap, self.curTime)
                 prevI = i
                 # save each frame if the saveMovie flag is set
@@ -256,7 +286,6 @@ class Simulator:
                     self.display.saveFrame(movieDir + "/%04d%04d.png" % (nightNum, i))
 
         # the night is over
-
         # calculate how much time we waste at the end of the night
         # curTime could be > twilEnd if we added 600 sec for clouds
         self.earlyNightEndWasteTime += max(twilEnd - self.curTime, 0)

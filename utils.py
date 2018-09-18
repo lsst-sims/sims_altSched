@@ -8,6 +8,7 @@ import itertools
 from lsst.sims.speedObservatory import Telescope
 import config
 from config import NORTH, SOUTH, EAST, SOUTHEAST
+from lsst.sims.speedObservatory import sky
 
 def areRasInRange(ras, raRange):
     """ Calculate which of `ras` are within `raRange`
@@ -131,3 +132,134 @@ def cartesian2Spherical(x, y, z):
         return np.vstack([phi, theta]).T
     else:
         return [phi, theta]
+
+
+def _getTime_Horizon(ra,dec,limit,tmin,tmax,limit_type='lower',n_inter=10):
+    """ Estimate times for which the field is visible (above or below a given line)
+          Input : ra,dec of the field
+                       lim: the limit below or above which the field is
+                       tmin,tmax= min and max times of observation  
+                       limit_type : below ('upper') or above ('lower') the limit
+          Output: times of min and max when the field crosses the limit
+    """
+    tmin_h=tmin
+    tmax_h=tmax
+
+    while (tmax_h-tmin_h) > 10.:
+        
+        times_h=np.linspace(tmin_h,tmax_h,n_inter)
+        cross=False
+        for i in range(len(times_h)-1):
+            alt_a, az_a = sky.radec2altaz(ra, dec,times_h[i])
+            alt_b, az_b = sky.radec2altaz(ra, dec,times_h[i+1])
+            
+            diff_a=alt_a-limit
+            diff_b=alt_b-limit
+            
+            if (diff_a*diff_b) <=0:
+                tmin_h=times_h[i]
+                tmax_h=times_h[i+1]
+                cross=True
+                break
+
+        if cross is False:
+            #  No horizon line crossed -> get out !
+            alt , az = sky.radec2altaz(ra, dec,times_h[0])
+            if ((alt-limit) >= 0 and limit_type=='lower' ) or  ((alt-limit) <= 0 and limit_type=='upper'):
+                return (np.min(times_h),np.max(times_h))
+            else:
+                return (-1.0,-1.0)
+            break
+
+    alt_a, az_a = sky.radec2altaz(ra, dec,tmin_h)
+    alt_b, az_b = sky.radec2altaz(ra, dec,tmax_h)
+    if  limit_type=='lower':
+        if (alt_a-limit)>=0 :
+            return (tmin,tmin_h)
+        else:
+            return (tmax_h,tmax)
+    else:
+        if (alt_a-limit)>=0 :
+            return (tmin_h,tmax)
+        else:
+            return (tmin,tmax_h)
+
+def _getMeridian_min(ra,dec,tmin,tmax,telescope,n_inter=100):
+    """ Estimate times for which the field is closest to the meridian
+          Input : ra,dec of the field
+                       tmin,tmax= min and max times of observation  
+                       telescope : the telescope
+          Output: tmin, tmax :times of min and max of observation
+                          ha: minimal hour angle  of the field (between tmin and tmax)
+                          time_fi : time corresponding to the minimun ha (between tmin and tmax)
+    """
+    tmin_h=tmin
+    tmax_h=tmax
+
+    while (tmax_h-tmin_h) > 10.:
+
+        times_h=np.linspace(tmin_h,tmax_h,n_inter)
+        mini=False
+        for i in range(len(times_h)-1):
+            lst_a = sky.unix2lst(telescope.longitude, times_h[i])
+            ha_a = lst_a - ra
+            lst_b = sky.unix2lst(telescope.longitude, times_h[i+1])
+            ha_b = lst_b - ra
+            if ha_a > np.pi:
+                ha_a=2.*np.pi-ha_a
+            if ha_b> np.pi:
+                ha_b=2.*np.pi-ha_b
+            
+            if (ha_a-ha_b) <=0:
+                tmin_h=times_h[i]
+                tmax_h=times_h[i+1]
+                mini=True
+                break
+
+        if not mini:
+            lst= sky.unix2lst(telescope.longitude, times_h[len(times_h)-1])
+            ha = lst- ra
+            if ha > np.pi:
+                ha=2.*np.pi-ha
+            return tmin,tmax,ha,times_h[len(times_h)-1]
+
+    time_fi=np.mean([tmin_h,tmax_h])
+    lst = sky.unix2lst(telescope.longitude, time_fi)
+    ha = np.abs(lst - ra)
+    if ha > np.pi:
+        ha=2.*np.pi-ha
+    return tmin,tmax,ha,time_fi
+
+def _getTime_obs(ra,dec,exptime,telescope,tmin,tmax):
+    """ Estimate times for which the field is visible (above the horizon)
+          Input : ra,dec : ra,dec of the field
+                       exptime : total exposure time of the field
+                       telescope : telescope model
+                       tmin, tmax : min and max times of observation
+         Output: tmin,tmax : min and max times for the field being above horizon and completely observable (ie the complete sequence of observation can be done)
+                        ha : min hour angle between tmin and tmax
+                        time_fi : time of min(ha)
+                       
+    """
+    tmin_up,tmax_up=_getTime_Horizon(ra,dec,telescope.minAlt,tmin,tmax)
+    tmin_down,tmax_down=_getTime_Horizon(ra,dec,telescope.maxAlt,tmin,tmax,limit_type='upper')
+
+    if tmin_up*tmax_up == 1 or  tmin_down*tmax_down == 1:
+        return -1.0,-1.0,-1.0,-1.0
+         
+    if tmin_down > tmax_up or tmin_up > tmax_down:
+        # No recovery between up and down region
+        return -1.0,-1.0,-1.0,-1.0
+    else:
+        tmin_fi=tmin_down
+        tmax_fi=min(tmax_up,tmax_down)
+        if tmin_up >= tmin_down:
+            tmin_fi=tmin_up
+        #check whether we will have time to perform the full sequence
+        if tmax_fi-tmin_fi < exptime:
+            return tmin_fi,tmax_fi,-1.0,-1.0
+        #we will not have the time to perform the sequence before the end of the night
+        if tmax-tmin_fi < exptime:
+            return tmin_fi,tmax_fi,-1.0,-1.0
+        
+        return _getMeridian_min(ra,dec,tmin_fi,tmax_fi-exptime,telescope)
