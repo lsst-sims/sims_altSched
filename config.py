@@ -67,12 +67,18 @@ DDExpTime = 60 * 60
 # so 2 15 second exposures would correspond to 30 here
 WFDExpTime = 30
 
+# exposure time in twilight
+xTwilExpTime = 5
+
 # number of exposures that are taken per visit
 numExposures = 2
+xTwilNumExposures = 1
 
 # number of seconds of overhead needed per visit
 # (shutter and potentially intermediate readout times)
 visitOverheadTime = (numExposures - 1) * 3 + 1
+xTwilVisitOverheadTime = (xTwilNumExposures - 1) * 3 + 1
+visitOverheadTime = xTwilVisitOverheadTime
 
 # whether to use the "relaxed" dome model in the sims.speedObservatory
 # telescope model

@@ -5,6 +5,7 @@ from graphics.GraphicalMonitor import GraphicalMonitor
 
 import numpy as np
 from minis.Scheduler import Scheduler
+from minis.XTwilScheduler import XTwilScheduler
 from Visit import PROP_WFD, PROP_DD
 import config
 from lsst.sims.speedObservatory import sky
@@ -13,11 +14,14 @@ from SkyMap import SkyMap
 import sys
 import os
 from datetime import datetime
+from config import NORTH, SOUTH
+import time
 
 from matplotlib import pyplot as plt
 from SummaryPlots import SummaryPlots
 
 from lsst.sims.ocs.kernel.time_handler import TimeHandler
+# TODO
 from lsst.sims.ocs.environment.cloud_model import CloudModel
 
 from lsst.sims.speedObservatory.utils import unix2mjd
@@ -29,6 +33,9 @@ trackMap = False
 # flag to control whether a window pops up to visualize the progress of the
 # scheduler
 showDisp = True and trackMap
+
+# flag to control whether we're simulating extended twilight time
+doXTwil = True
 
 # which mode to run the graphics in (it's passed as the argument to the
 # GraphicalMonitor constructor). Options are "nvisits" -- visualize the total
@@ -152,8 +159,12 @@ class Simulator:
             about the order in which nights are simulated, but the Scheduler
             will probably get confused if nights are not simulated sequentially
         """
-        twilStart = sky.twilStart(config.surveyStartTime, nightNum)
-        twilEnd   = sky.twilEnd(config.surveyStartTime, nightNum)
+        if doXTwil:
+            twilStart = sky.xTwilStart(config.surveyStartTime, nightNum)
+            twilEnd   = sky.xTwilEnd(config.surveyStartTime, nightNum)
+        else:
+            twilStart = sky.twilStart(config.surveyStartTime, nightNum)
+            twilEnd   = sky.twilEnd(config.surveyStartTime, nightNum)
 
         # start out the simulation at the beginning of the night
         self.curTime = twilStart
@@ -168,7 +179,10 @@ class Simulator:
         wasDomeJustClosed = False
 
         # loop through the visits given by the scheduler
-        for i, visit in enumerate(self.sched.scheduleNight(nightNum)):
+        direction = NORTH if nightNum % 2 == 0 else SOUTH
+        xTwilSched = XTwilScheduler(self, self.tel, nightNum, direction)
+        #for i, visit in enumerate(self.sched.scheduleNight(nightNum)):
+        for i, visit in enumerate(xTwilSched.schedule()):
             # figure out whether/how we should update the display
             perNight, deltaI = self.getUpdateRate(nightNum, i)
 
@@ -189,7 +203,8 @@ class Simulator:
             # scheduler by continuing
             if self.curTime > timeBeforeDomeClose:
                 # let sched know that the dome closed for a while
-                self.sched.notifyDomeClosed(self.curTime - timeBeforeDomeClose)
+                if not doXTwil:
+                    self.sched.notifyDomeClosed(self.curTime - timeBeforeDomeClose)
                 wasDomeJustClosed = True
                 # continue to get a new visit that isn't stale
                 continue
