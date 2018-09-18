@@ -186,7 +186,7 @@ class NightScheduler:
                     raise RuntimeError("invalid direction " + str(scanDir))
 
                 for visit in self._schedulePath(sortedScan, filt):
-                    # _schedulPath returns before yielding a stale visit
+                    # _schedulePath returns before yielding a stale visit
                     # due to a closed dome. So if it returns a visit, we
                     # know the dome wasn't just closed
                     yield visit

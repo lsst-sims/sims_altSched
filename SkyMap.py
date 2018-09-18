@@ -141,6 +141,9 @@ class SkyMap:
         self.invalidFilter = len(Telescope.filters)
         self.obsFilters = np.ones(self.pixValues.shape) * self.invalidFilter
 
+        # store an array with the last slew time to this pixel
+        self.slewTimes = np.zeros(len(self.skyPix))
+
         # keep track of how long each row of pixels is in the mollweide
         self.rowLengths = {y: 0 for y in range(self.yMin, self.yMax)}
         ys = np.sort(projPix[:,0])
@@ -166,8 +169,9 @@ class SkyMap:
         # note: this does not clear self.visitInfos
         self.pixValues[:] = 0
         self.obsFilters[:] = self.invalidFilter
+        self.slewTimes[:] = 0
 
-    def addVisit(self, visit, time):
+    def addVisit(self, visit, slewTime, time):
         # edgeOfFov should be the radius of a circle that includes all of the fov
         edgeOfFov = utils.spherical2Cartesian(0, 1.5 * self.telescope.fovWidth / 2)
         r = np.linalg.norm(np.array([1,0,0]) - np.array(edgeOfFov))
@@ -253,14 +257,19 @@ class SkyMap:
                                                       pupilCoords[:,1])]
         self.pixValues[coveredPixIds] += 1
         self.obsFilters[coveredPixIds] = Telescope.filterId[visit.filter]
+        self.slewTimes[coveredPixIds] = np.where(
+                self.slewTimes[coveredPixIds] > slewTime,
+                self.slewTimes[coveredPixIds],
+                slewTime)
         for coveredPixId in coveredPixIds:
             revisitTime = time - self.previousVisitTimes[coveredPixId]
             # if the last visit was > 4 months ago, the field must have
             # just risen for the year, so don't count that
             if not np.isnan(revisitTime) and revisitTime < 3600 * 24 * 30 * 4:
-                self.revisitTimes[coveredPixId].append(revisitTime)
+                #self.revisitTimes[coveredPixId].append(revisitTime)
+                pass
             visitInfo = [time, visit.ra, visit.dec, visit.filter]
-            self.visitInfos[coveredPixId].append(visitInfo)
+            #self.visitInfos[coveredPixId].append(visitInfo)
         self.previousVisitTimes[coveredPixIds] = time
 
 
@@ -337,6 +346,10 @@ class SkyMap:
                                    skyAngle,
                                    defaultVal = self.invalidFilter).astype(int)
         return filterMap
+
+    def getSlewTimeMap(self, skyAngle):
+        slewTimeMap = self._get2DMap(self.slewTimes, skyAngle)
+        return slewTimeMap
 
     def getRevisitMap(self):
         # np.array(self.revisitTimes) will hopefully return a 1-D

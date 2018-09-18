@@ -198,10 +198,11 @@ class Simulator:
                 alt, az = sky.radec2altaz(visit.ra, visit.dec, self.curTime)
                 # make sure this az is a valid place to look
                 if alt < self.tel.minAlt or alt > self.tel.maxAlt:
-                    print("invalid alt (", np.degrees(alt), "deg) night", nightNum)
+                    #print("invalid alt (", np.degrees(alt), "deg) night", nightNum)
                     continue
 
                 # figure out how far we have to slew
+                slewTime = 0
                 if i > 0 and not wasDomeJustClosed:
                     slewTime = self.tel.calcSlewTime(prevAlt, prevAz, prevFilter,
                                                      alt, az, visit.filter,
@@ -217,7 +218,7 @@ class Simulator:
                 # notify the skyMap of the visit
                 # (the time of the visit is the time after the slew is over)
                 if trackMap:
-                    self.skyMap.addVisit(visit, self.curTime)
+                    self.skyMap.addVisit(visit, slewTime, self.curTime)
 
                 # write the observation to the csv output if necessary
                 if writeCsv:
@@ -238,13 +239,14 @@ class Simulator:
                 self.sched.notifyVisitComplete(visit, self.curTime)
 
                 (prevAlt, prevAz, prevFilter) = (alt, az, visit.filter)
+                wasDomeJustClosed = False
             else:
                 # the visit was None, which means the scheduler has nowhere to
                 # point at the moment
-                self.curTime += 30
-                self.fieldsRisingWasteTime += 30
+                self.curTime += 120
+                self.fieldsRisingWasteTime += 120
+                wasDomeJustClosed = True
 
-            wasDomeJustClosed = False
 
             # now that we've added the visit (if there was one),
             # update the display
@@ -275,6 +277,11 @@ class Simulator:
         # clear the skyMap so the next updateDisplay won't have tonight's visits
         if showDisp and clearDisplayNightly:
             self.skyMap.clear()
+        if 0 < len(self.slewTimes) < 1:
+            print("S" if direction == SOUTH else "N", end="")
+            print(nightNum, end=":")
+            print("#/mean slew:", len(self.slewTimes), np.mean(self.slewTimes))
+        self.slewTimes = []
 
     def _outputSummaryStats(self):
         """ Displays some example summary statistics

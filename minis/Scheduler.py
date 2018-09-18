@@ -90,7 +90,6 @@ class Scheduler:
                                                   self.context.time())
                         prevAlt = prevAz = None
             if prevAlt is not None:
-                # Don't change laxDome param without changing in Simulator too
                 slewTime = self.telescope.calcSlewTime(prevAlt, prevAz, prevFilter,
                                                        alt, az, visit.filter,
                                                        laxDome = config.laxDome)
