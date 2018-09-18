@@ -14,7 +14,7 @@ class GraphicalMonitor:
 
     def __init__(self, skyMap, mode="nvisits"):
         self.mode = mode
-        supportedModes = set(["nvisits","filters"])
+        supportedModes = set(["nvisits", "filters", "slewtimes"])
         if mode not in supportedModes:
             raise ValueError("graphics mode " + str(mode) + " not supported")
 
@@ -110,6 +110,13 @@ class GraphicalMonitor:
         elif self.mode == "filters":
             filterMap = skyMap.getFiltersMap(skyAngle).T
             imdata = self.filterColorLookup[filterMap]
+
+        elif self.mode == "slewtimes":
+            imdata = skyMap.getSlewTimeMap(skyAngle) / 60
+            #if np.max(imdata) > 0:
+            #    imdata = imdata / np.max(imdata)
+            hue = (((240 - imdata * 240) / 360) * 255).astype(int).transpose()
+            imdata = self.packedColorLookup[hue]
 
         # draw a line down the middle to represent the meridian
         imdata[self.meridianX,:] = 0

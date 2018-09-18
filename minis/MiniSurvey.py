@@ -40,7 +40,8 @@ class MiniSurvey:
         cls.rotationGenerator = RotationGenerator(rotation, direction)
 
     @classmethod
-    def newMiniSurvey(cls, telescope, minRa, maxRa, direction):
+    def newMiniSurvey(cls, telescope, minRa, maxRa, direction,
+                      minDec=None, maxDec=None):
         """ Return a new tiling of the sky
 
         Parameters
@@ -53,6 +54,12 @@ class MiniSurvey:
             The maximum RA that should be included in the minisurvey (radians)
         direction : enum(NORTH, SOUTH, EAST)
             The cardinal direction the minisurvey should be in
+        minDec : float
+            The minimum dec that should be included in the minisurvey (radians)
+            Set to None to use the values in the config module
+        maxDec : float
+            The maximum dec that should be included in the minisurvey (radians)
+            Set to None to use the values in the config module
 
         Returns
         -------
@@ -94,23 +101,27 @@ class MiniSurvey:
         # TODO should rotate around y as well or else you get structured
         # noise in the final result
 
-        # calculate min/maxDec that correspond to the passed-in direction
-        # and modify min/maxRa if we're in the zenith dec band
-        if direction == config.NORTH:
-            minDec = telescope.latitude + config.zenithBuffer
-            maxDec = config.maxDec
-            # min/maxRa remain unchanged
-        elif direction == config.SOUTH:
-            minDec = config.minDec
-            maxDec = telescope.latitude - config.zenithBuffer
-            # min/maxRa remain unchanged
-        elif direction == config.EAST:
-            minDec = telescope.latitude - config.zenithBuffer
-            maxDec = telescope.latitude + config.zenithBuffer
-            minRa += config.zenithBuffer + config.zenithBufferOffset
-            maxRa += config.zenithBuffer + config.zenithBufferOffset
-        else:
-            raise ValueError("Invalid direction: " + str(direction))
+        if (minDec is None) ^ (maxDec is None):
+            raise ValueError("min/maxDec must both be None or not None")
+        if minDec is None:
+            # calculate min/maxDec that correspond to the passed-in direction
+            # and modify min/maxRa if we're in the zenith dec band
+            if direction == config.NORTH:
+                minDec = telescope.latitude + config.zenithBuffer
+                maxDec = config.maxDec
+                # min/maxRa remain unchanged
+            elif direction == config.SOUTH:
+                minDec = config.minDec
+                maxDec = telescope.latitude - config.zenithBuffer
+                # min/maxRa remain unchanged
+            elif direction == config.EAST:
+                minDec = telescope.latitude - config.zenithBuffer
+                maxDec = telescope.latitude + config.zenithBuffer
+                # TODO need to % 2pi here I think
+                minRa += config.zenithBuffer + config.zenithBufferOffset
+                maxRa += config.zenithBuffer + config.zenithBufferOffset
+            else:
+                raise ValueError("Invalid direction: " + str(direction))
 
         # choose the subset of pointings that lie in the min/maxRa/Dec rectangle
         validRa = utils.areRasInRange(allPointings[:,0], (minRa, maxRa))
