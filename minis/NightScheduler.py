@@ -19,16 +19,6 @@ import numpy.lib.recfunctions as rf
 # initial estimates of slew time (updated after the first night)
 _estAvgSlewTimes = {NORTH: 10,
                     SOUTHEAST: 10}
-"""
-# read in DD field centers
-_ddFieldCenters = []
-with open("ddFields.csv", "r") as ddFile:
-    fields = csv.DictReader(ddFile)
-    for field in fields:
-        ra = float(field["ra"])
-        dec = float(field["dec"])
-        _ddFieldCenters.append((ra, dec))
-"""
 
 class NightScheduler:
     """ Class that schedules a single night
@@ -37,7 +27,7 @@ class NightScheduler:
     must be called at the appropriate times as well. See comment in schedule()
     for information on how the NightScheduler schedules.
     """
-    def __init__(self, telescope, nightNum, direction, makeupVPs,DD):
+    def __init__(self, telescope, nightNum, direction, makeupVPs, DD):
         self.telescope = telescope
         self.nightNum = nightNum
         self.direction = direction
@@ -47,15 +37,15 @@ class NightScheduler:
         self.wasDomeJustClosed = False
         self.domeClosedDuration = 0
 
-        self.DD=DD
+        self.DD = DD
         # figure out what DD visit we're going to do tonight
-        
+
         if config.useDD:
             self.DDVisit = self._getTonightsDD()
         else:
             self.DDVisit = None
 
-        
+
     def _isDDVisitInRevisitGroup(self, revisitGroup):
         # helper to check if a DD visit falls within the min/max
         # RA range of a revisit group
@@ -119,8 +109,8 @@ class NightScheduler:
             # we do plan to do a DD visit tonight, so the amount of time
             # available for WFD exposures is nightLength - DDexpTime
             # TODO this doesn't include slew time to/from the DD field
-            expTime=self.DDVisit.sequences[self.DDVisit.current_sequence].TotExpTime
-            
+            expTime = self.DDVisit.sequences[self.DDVisit.currentSequence].totExpTime
+
             expectedNumVisits = int((nightLength - expTime) / t)
 
         # TODO it might be greater than numVisits / 2 if we expect to
@@ -167,10 +157,9 @@ class NightScheduler:
         # how much observing time we would have accomplished during the rest
         # of that revisitgroup
         numVisitsKilled = 0
-        
-        
+
+
         while rgIdx < len(revisitGroups):
-            
             rg = revisitGroups[rgIdx]
             rgIdx += 1
             # perform scan1 and scan2 twice in a row but use
@@ -180,7 +169,7 @@ class NightScheduler:
                     (1, rg["scan2"], rg["scanDir2"], rg["filter2"]),
                     (2, rg["scan1"], rg["scanDir1"], rg["filter3"]),
                     (3, rg["scan2"], rg["scanDir2"], rg["filter4"])]:
-                
+
                 if scanDir == NORTH:
                     sortedScan = sorted(scan, key=lambda v: v.dec)
                 elif scanDir == SOUTH:
@@ -195,7 +184,7 @@ class NightScheduler:
                     sortedScan = sorted(scan, key=lambda v: -1 * (v.ra - raMin) % (2*np.pi))
                 else:
                     raise RuntimeError("invalid direction " + str(scanDir))
-                
+
                 for visit in self._schedulePath(sortedScan, filt):
                     # _schedulePath returns before yielding a stale visit
                     # due to a closed dome. So if it returns a visit, we
@@ -236,17 +225,17 @@ class NightScheduler:
                 # flag
                 self.wasDomeJustClosed = False
 
-    def schedule_DD(self):
+    def scheduleDD(self):
         """ Schedule DD visits """
-        
-        ra=self.DDVisit.ra
-        dec=self.DDVisit.dec
-        current_sequence=self.DDVisit.current_sequence
-        for visit in self.DDVisit.sequences[current_sequence].Visits(ra,dec):
+
+        ra = self.DDVisit.ra
+        dec = self.DDVisit.dec
+        currentSequence = self.DDVisit.currentSequence
+        for visit in self.DDVisit.sequences[currentSequence].Visits(ra,dec):
             yield visit
-            
-        self.DDVisit.last_night=self.nightNum
-        self.DDVisit.last_sequence=current_sequence
+
+        self.DDVisit.last_night = self.nightNum
+        self.DDVisit.last_sequence = currentSequence
         
     def _schedulePath(self, path, filt):
         """ Schedules a list of pointings
@@ -364,7 +353,7 @@ class NightScheduler:
         return (_estAvgSlewTimes[self.direction] +
                 config.WFDExpTime +
                 config.visitOverheadTime)
-    
+
     def _getTonightsDD(self):
         """ Decides which DD field to observe for tonight
 
@@ -379,18 +368,17 @@ class NightScheduler:
 
         # loop through all DD fields to see which one we can observe tonight
 
-        DDF_tonight=[]
-        
-        r=[]
+        tonightsDD = []
+
+        r = []
     
         for dd in self.DD:
-            #print('candidate',dd)
             ra = dd.ra
             dec = dd.dec
-            dd.current_sequence=dd.last_sequence+1
-            if dd.current_sequence >= dd.nseq:
-                dd.current_sequence = 0
-            exptime=dd.sequences[dd.current_sequence].TotExpTime
+            dd.currentSequence = dd.last_sequence + 1
+            if dd.currentSequence >= dd.nseq:
+                dd.currentSequence = 0
+            exptime = dd.sequences[dd.currentSequence].totExpTime
 
             raBuffer = exptime / (24*3600) * 2*np.pi
             DDDirection = utils.directionOfDec(dec)
@@ -408,50 +396,50 @@ class NightScheduler:
                 inRaRange = utils.isRaInRange(ra, raRange)
                 DDDirection = SOUTHEAST
 
-            
-            if not inRaRange :
+            if not inRaRange:
                 continue
-        
-             
-            night_last=dd.last_night
-            
-            #do not take into accoun fields that were observed recently (2 days ago)
-           
-            if night_last == -1 or self.nightNum-night_last > 2:
-                th_min,th_max,ha,time_obs=utils._getTime_obs(ra,dec,exptime,self.telescope,nightStart,nightEnd)
-                dd.time_obs=time_obs
-                dd.ha=ha
-                DDF_tonight.append(dd)
 
-        if len(DDF_tonight) > 0:
-            #among the selected, if there are fields not observed (yet) ie last_night=-1 : should be priority
+            # do not take into account fields that were observed
+            # recently (2 days ago)
+
+            if dd.prevNight == -1 or self.nightNum - dd.prevNight > 2:
+                th_min, th_max, ha, time_obs = \
+                        utils.getTimeObs(ra, dec, exptime, self.telescope,
+                                         nightStart, nightEnd)
+                dd.time_obs = time_obs
+                dd.ha = ha
+                tonightsDD.append(dd)
+
+        if len(tonightsDD) > 0:
+            # among the selected, if there are fields not observed (yet) ie
+            # last_night=-1 : should be priority
             list_priority=[]
-            for dd in DDF_tonight:
+            for dd in tonightsDD:
                 #print('selected',dd)
                 if dd.last_night == -1:
                     list_priority.append(dd)
 
             if len(list_priority) > 0:
-                DDF_tonight= list_priority
-                
-            if len(DDF_tonight) > 1 :
-                r=[]
-                for i,dd in enumerate(DDF_tonight):
-                    r.append((i,dd.last_night,dd.ha))
-                tab=np.rec.fromrecords(r,names=['index','last_night','ha'])
+                tonightsDD = list_priority
+
+            if len(tonightsDD) > 1 :
+                r = []
+                for i, dd in enumerate(tonightsDD):
+                    r.append((i, dd.last_night, dd.ha))
+                tab = np.rec.fromrecords(r, names=['index','last_night','ha'])
                 """
                 idv = tab['last_night'] == np.min(tab['last_night'])
                 sel_visit=tab[idv]
                 if len(sel_visit) > 1:
                 """
-                min_ha=np.argmin(tab['ha'])
-                return DDF_tonight[np.asscalar(tab[min_ha]['index'])]
+                min_ha = np.argmin(tab['ha'])
+                return tonightsDD[np.asscalar(tab[min_ha]['index'])]
                 """
                 else:
-                    return DDF_tonight[np.asscalar(sel_visit['index'])]
+                    return tonightsDD[np.asscalar(sel_visit['index'])]
                 """
             else:
-                return DDF_tonight[0]
+                return tonightsDD[0]
         else:
             return None
 
@@ -845,7 +833,7 @@ class NightScheduler:
             if (self.DDVisit is not None and
                     self._isDDVisitInRevisitGroup(SRevisitGroup)):
                 # TODO this ignores the slew time to/from the DD field
-                cumTime += self.DDVisit['TotExpTime']
+                cumTime += self.DDVisit['totExpTime']
             """
             revisitGroups.append(SRevisitGroup)
 

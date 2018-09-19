@@ -20,7 +20,6 @@ from matplotlib import pyplot as plt
 from SummaryPlots import SummaryPlots
 
 from lsst.sims.ocs.kernel.time_handler import TimeHandler
-#from lsst.sims.ocs.environment.cloud_model import CloudModel
 from lsst.sims.ocs.environment.cloud_interface import CloudInterface
 from lsst.sims.speedObservatory.utils import unix2mjd
 
@@ -60,8 +59,6 @@ resScale = 4
 
 # the name of the run. The csv output is saved to
 # ./results/`runName`/`runName`.csv
-#runName = "altsched_test_DD"
-#Ph.G modif
 
 nfields=len(open("ddFields.csv", "r").readlines())-1
 nyears=int(config.surveyNumNights/365)
@@ -99,10 +96,6 @@ class Simulator:
         are in config.py
         """
         self.tel = tel
-        """
-        self.tel.minAlt=np.radians(0.0)
-        self.tel.maxAlt=np.radians(90.0)
-        """
         # read in downtime nights TODO use SOCS/speedObservatory for this
         downtimeNights = self._parseDowntime()
 
@@ -115,7 +108,7 @@ class Simulator:
         startDatetime = datetime.utcfromtimestamp(config.surveyStartTime)
         timeHandler = TimeHandler(datetime.strftime(startDatetime, dateFormat))
         self.cloudModel = CloudInterface(timeHandler)
-        
+
         # load the cloud database
         self.cloudModel.initialize()
 
@@ -190,7 +183,7 @@ class Simulator:
         for i, visit in enumerate(self.sched.scheduleNight(nightNum)):
             # figure out whether/how we should update the display
             perNight, deltaI = self.getUpdateRate(nightNum, i)
-           
+
             # stop if the night is over
             if self.curTime >= twilEnd:
                 break
@@ -200,7 +193,6 @@ class Simulator:
             cloudCover = self.cloudModel.get_cloud(deltaT)
             timeBeforeDomeClose = self.curTime
             while cloudCover > config.maxCloudCover and self.curTime <= twilEnd:
-                #print('clouds')
                 self.curTime += 600
                 deltaT = self.curTime - config.surveyStartTime
                 cloudCover = self.cloudModel.get_cloud(deltaT)
@@ -217,7 +209,7 @@ class Simulator:
             if visit is not None:
                 alt, az = sky.radec2altaz(visit.ra, visit.dec, self.curTime)
                 # make sure this az is a valid place to look
-                
+
                 if alt < self.tel.minAlt or alt > self.tel.maxAlt:
                     print("invalid alt (", np.degrees(alt), "deg) night", nightNum,visit.prop,visit.ra,visit.dec,visit.filter,self.curTime,np.degrees(alt))
                     continue
@@ -280,7 +272,6 @@ class Simulator:
             # now that we've added the visit (if there was one),
             # update the display
             if showDisp and not perNight and i - prevI >= deltaI:
-                #time.sleep(0.5)
                 self.display.updateDisplay(self.skyMap, self.curTime)
                 prevI = i
                 # save each frame if the saveMovie flag is set

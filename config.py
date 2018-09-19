@@ -6,7 +6,6 @@ from lsst.sims.speedObservatory import Telescope
 
 # number of nights to run the simulation for
 surveyNumNights = 365 * 10
-#surveyNumNights = 11
 
 # start time of the survey as a unix timestamp
 # this is january 1 2022 at midnight
@@ -32,8 +31,7 @@ minDec = np.radians(-90)
 
 # Approximate width in RA of scans in the zenith dec band
 # 30 degrees seems reasonable
-EScanWidth = np.radians(40)
-#EScanWidth = np.radians(40)
+EScanWidth = np.radians(30)
 
 # buffer zone near the zenith to the N/S/E 
 # TODO these probably shouldn't change, so maybe shouldn't be config vars
