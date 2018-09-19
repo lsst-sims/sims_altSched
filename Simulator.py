@@ -211,7 +211,11 @@ class Simulator:
                 # make sure this az is a valid place to look
 
                 if alt < self.tel.minAlt or alt > self.tel.maxAlt:
-                    print("invalid alt (", np.degrees(alt), "deg) night", nightNum,visit.prop,visit.ra,visit.dec,visit.filter,self.curTime,np.degrees(alt))
+                    """
+                    print("invalid alt (", np.degrees(alt), "deg) night",
+                          nightNum, visit.prop, visit.ra, visit.dec,
+                          visit.filter, self.curTime, np.degrees(alt))
+                    """
                     continue
 
                 # figure out how far we have to slew

@@ -166,7 +166,7 @@ def _getTimeHorizon(ra,dec,limit,tmin,tmax,limit_type='lower',n_inter=10):
             #  No horizon line crossed -> get out !
             alt, az = sky.radec2altaz(ra, dec, times_h[0])
             if (((alt - limit) >= 0 and limit_type == 'lower') or
-                ((alt - limit) <= 0 and limit_type == 'upper'):
+                ((alt - limit) <= 0 and limit_type == 'upper')):
                 return (np.min(times_h), np.max(times_h))
             else:
                 return (-1.0, -1.0)

@@ -14,8 +14,8 @@ surveyStartTime = 1640995200
 # minimum and maximum declinations to observe at
 # -90 to 13 gets about equal area in the North and Southeast
 #
-maxDec = np.radians(3.)
-minDec = np.radians(-90)
+maxDec = np.radians(5.)
+minDec = np.radians(-66)
 
 #try an extended survey
 #maxDec = np.radians(18)
@@ -48,7 +48,7 @@ zenithBufferOffset = 4 * tel.fovWidth
 # density of the tiling in units of pointings / steradian
 # this may be the approximate value depending on whether the Tiling
 # subclass can achieve arbitrary densities or not (e.g. ThomsonTiling can't)
-tilingDensity = (1 / 12) * (180/np.pi)**2
+tilingDensity = (1 / 14) * (180/np.pi)**2
 
 # don't observe when the cloud is more than maxCloudCover cloudy
 maxCloudCover = 0.7
@@ -64,7 +64,9 @@ moonGMaxPhase = 0.6
 
 # whether or not to include deep drilling fields
 useDD = True
-DDExpTime=30
+DDExpTime = 30
+DDOverheadTime = 3 # 2 readout, 1 shutter
+DDTimePerNight = 40 * 60 # 40 minutes for DD when we do it
 
 # total number of seconds of exposure time for WFD visits
 # so 2 15 second exposures would correspond to 30 here

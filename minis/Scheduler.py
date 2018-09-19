@@ -35,7 +35,7 @@ class Scheduler:
         self.EVisitsComplete = 0
 
         # Loading DD configuration (once for all at the beginning of the survey)
-        self.DD = DDF.loadDD('ddFields_new.txt', self.telescope)
+        #self.DDFs = DDF.loadDDFs('ddFields_new.txt', self.telescope)
 
     def scheduleNight(self, nightNum):
         """ Schedules the `nightNum`th night
@@ -73,21 +73,23 @@ class Scheduler:
         # return each visit prescribed by tonight's NightScheduler
         #self.nightScheduler = NightScheduler(self.telescope, nightNum,
         #                                     self.nightDirection, self.makeupVPs)
-        self.nightScheduler = NightScheduler(self.telescope, nightNum,
-                                             self.nightDirection, self.makeupVPs,
-                                             self.DD)
+        self.nightScheduler = NightScheduler(self.context, self.telescope, nightNum,
+                                             self.nightDirection, self.makeupVPs)
+                                             #self.DDFs)
         prevTime = None
         for visit in self.nightScheduler.schedule():
             time = self.context.time()
 
             alt, az = sky.radec2altaz(visit.ra, visit.dec, self.context.time())
 
-            if self.nightScheduler.DDVisit is not None:
-                visitGap = time - self.nightScheduler.DDVisit.time_obs
+            """
+            if self.nightScheduler.tonightsDDF is not None:
+                visitGap = time - self.nightScheduler.tonightsDDF.time_obs
                 if visitGap >= 0 and np.abs(visitGap) < 60.:
                 # observe DDF now
                     for visit_dd in self.nightScheduler.scheduleDD():
                         yield visit_dd
+            """
 
             if alt < self.telescope.minAlt:
                 # East is +pi/2, so if the field has az < pi, it is rising
@@ -105,6 +107,8 @@ class Scheduler:
                         alt, az = sky.radec2altaz(visit.ra, visit.dec,
                                                   self.context.time())
                         prevAlt = prevAz = None
+
+            # visit is valid to be observed
             if prevAlt is not None:
                 slewTime = self.telescope.calcSlewTime(prevAlt, prevAz, prevFilter,
                                                        alt, az, visit.filter,

@@ -16,6 +16,8 @@ import csv
 import numpy as np
 import numpy.lib.recfunctions as rf
 
+from DDF import DDScheduler
+
 # initial estimates of slew time (updated after the first night)
 _estAvgSlewTimes = {NORTH: 10,
                     SOUTHEAST: 10}
@@ -27,7 +29,8 @@ class NightScheduler:
     must be called at the appropriate times as well. See comment in schedule()
     for information on how the NightScheduler schedules.
     """
-    def __init__(self, telescope, nightNum, direction, makeupVPs, DD):
+    def __init__(self, context, telescope, nightNum, direction, makeupVPs):
+        self.context = context
         self.telescope = telescope
         self.nightNum = nightNum
         self.direction = direction
@@ -37,16 +40,9 @@ class NightScheduler:
         self.wasDomeJustClosed = False
         self.domeClosedDuration = 0
 
-        self.DD = DD
-        # figure out what DD visit we're going to do tonight
-
-        if config.useDD:
-            self.DDVisit = self._getTonightsDD()
-        else:
-            self.DDVisit = None
-
 
     def _isDDVisitInRevisitGroup(self, revisitGroup):
+        # TODO probably delete this
         # helper to check if a DD visit falls within the min/max
         # RA range of a revisit group
         scan1 = revisitGroup["scan1"]
@@ -63,7 +59,7 @@ class NightScheduler:
         else:
             maxRa = ras.max()
             minRa = ras.min()
-        return utils.isRaInRange(self.DDVisit['ra'], (minRa, maxRa))
+        return utils.isRaInRange(self.tonightsDDF['ra'], (minRa, maxRa))
 
 
     def schedule(self):
@@ -95,23 +91,38 @@ class NightScheduler:
         # this will hold the VPs in tonight's mini survey
         self.tonightsMini = None
        
-
         # figure out how many visits we'll probably do tonight
         nightLength = sky.nightLength(config.surveyStartTime, self.nightNum)
+
+        if config.useDD:
+            # figure out how much time we'll spend doing DD tonight
+            # TODO bad accessing private thing -- just make a getter...
+            leftOutFilter = filtersequence._leftOutFilters[self.direction]
+            ddScheduler = DDScheduler(self.nightNum, self.direction, leftOutFilter)
+            ddTime = ddScheduler.telTimeTonight()
+            ddDesiredStartTime = ddScheduler.desiredStartTime()
+        else:
+            ddTime = 0
+
+
         # the period of exposure taking is the sum of the exposure time,
         # the visit overhead time (shutter/intermediate readout),
         # and the slew time
-        t = self._expectedVisitTime()
-        if self.DDVisit is None:
+        expectedWfdVisitTime = self._expectedWfdVisitTime()
+        expectedNumVisits = int((nightLength - ddTime) / expectedWfdVisitTime)
+
+        """
+        if self.tonightsDDF is None:
             # we won't do a DD visit tonight
-            expectedNumVisits = int(nightLength / t)
+            expectedNumVisits = int(nightLength / expectedWfdVisitTime)
         else:
             # we do plan to do a DD visit tonight, so the amount of time
             # available for WFD exposures is nightLength - DDexpTime
             # TODO this doesn't include slew time to/from the DD field
-            expTime = self.DDVisit.sequences[self.DDVisit.currentSequence].totExpTime
+            expTime = self.tonightsDDF.sequences[self.tonightsDDF.currentSequence].totExpTime
 
-            expectedNumVisits = int((nightLength - expTime) / t)
+            expectedNumVisits = int((nightLength - ddTime) / expectedWfdVisitTime)
+        """
 
         # TODO it might be greater than numVisits / 2 if we expect to
         # lose revisits due to weather. May model this at some point
@@ -158,10 +169,68 @@ class NightScheduler:
         # of that revisitgroup
         numVisitsKilled = 0
 
+        isDDComplete = True if ddTime == 0 else False
+        while rgIdx < len(revisitGroups) or not isDDComplete:
+            assert(rgIdx <= len(revisitGroups))
 
-        while rgIdx < len(revisitGroups):
+            # first, check if we should do DD now
+            if config.useDD:
+                # flag to catch the case that the optimal DD time is at the
+                # very end of the night
+                onlyDDLeft = rgIdx == len(revisitGroups)
+
+                # flag to check if we should execute the DD before doing the next
+                # revisit group
+                isTimeForDD = False
+                if rgIdx < len(revisitGroups):
+                    nextRg = revisitGroups[rgIdx]
+                    nVisits = 2 * (len(nextRg["scan1"]) + len(nextRg["scan2"]))
+                    timeForNextBlock = nVisits * expectedWfdVisitTime
+                    curTime = self.context.time()
+                    # we should do the DD now if executing the next revisit group
+                    # would make us late for the DD
+                    isTimeForDD = curTime + timeForNextBlock / 2 >= ddDesiredStartTime
+                if (not isDDComplete) and (onlyDDLeft or isTimeForDD):
+                    # figure out which filters we should suggest that the DD
+                    # observations start and end in
+                    if rgIdx == 0:
+                        startFilter = None
+                    else:
+                        startFilter = revisitGroups[rgIdx - 1]["filter4"]
+                    if rgIdx == len(revisitGroups):
+                        endFilter = None
+                    else:
+                        endFilter = revisitGroups[rgIdx]["filter1"]
+                    # TODO start/end filter don't make sense as is since
+                    # they'll always be the same (for maxfchanges). Should
+                    # instead modify WFD so it does e.g. g-r-i-z instead of
+                    # g-r-r-i surrounding the DD observation. Or just switch
+                    # to 2 filters per night, which might make things easier
+                    # (then you'd do, e.g. g-r-g-r instead of g-r-r-g around
+                    # a dd observation)
+                    for visit in ddScheduler.schedule(startFilter, endFilter):
+                        yield visit
+                        if self.wasDomeJustClosed:
+                            # assumes we got through none of the DD before the dome
+                            # closed, which won't usually be true but doesn't
+                            # really matter and saves the hassle of keeping track
+                            # of how much did complete
+
+                            # also assumes that the dome closed for at least the
+                            # length of the DD visit
+
+                            # note that we don't reset self.wasDomeJustClosed
+                            # because if the dome was closed for a while, we should
+                            # also kill some revisit groups (done below)
+                            self.domeClosedDuration -= ddTime
+                    isDDComplete = True
+                if rgIdx == len(revisitGroups):
+                    # we just had the DD left; no more WFD revisit groups
+                    break
+
             rg = revisitGroups[rgIdx]
             rgIdx += 1
+
             # perform scan1 and scan2 twice in a row but use
             # potentially-different filters the second time through
             for i, scan, scanDir, filt in [
@@ -205,10 +274,14 @@ class NightScheduler:
                     break
 
             if self.wasDomeJustClosed:
-                avgVisitTime = self._expectedVisitTime()
+                avgVisitTime = self._expectedWfdVisitTime()
                 timeKilled = 0
                 while rgIdx < len(revisitGroups) - 1:
                     rg = revisitGroups[rgIdx]
+                    # this assumes we completed no visits from the RG during
+                    # which the dome closed (which won't usually be true, but
+                    # doesn't matter much and saves us the hassle of calculating
+                    # how many did complete successfully)
                     numVisitsKilled += (len(rg["scan1"]) + len(rg["scan2"])) * 2
 
                     # decide whether or not to kill one more revisitgroup
@@ -224,18 +297,21 @@ class NightScheduler:
                 # we finished handling the dome closed interrupt, so lower the
                 # flag
                 self.wasDomeJustClosed = False
+        # end loop over revisit groups
+        if config.useDD:
+            assert(isDDComplete)
 
     def scheduleDD(self):
         """ Schedule DD visits """
 
-        ra = self.DDVisit.ra
-        dec = self.DDVisit.dec
-        currentSequence = self.DDVisit.currentSequence
-        for visit in self.DDVisit.sequences[currentSequence].Visits(ra,dec):
+        ra = self.tonightsDDF.ra
+        dec = self.tonightsDDF.dec
+        currentSequence = self.tonightsDDF.currentSequence
+        for visit in self.tonightsDDF.sequences[currentSequence].schedule(ra, dec):
             yield visit
 
-        self.DDVisit.last_night = self.nightNum
-        self.DDVisit.last_sequence = currentSequence
+        self.tonightsDDF.prevNight = self.nightNum
+        self.tonightsDDF.last_sequence = currentSequence
         
     def _schedulePath(self, path, filt):
         """ Schedules a list of pointings
@@ -348,18 +424,15 @@ class NightScheduler:
     def _getFilters(self, nScans):
         return filtersequence.maxFChanges(self.nightNum, self.direction, nScans)
 
-    def _expectedVisitTime(self):
+    def _expectedWfdVisitTime(self):
         """ Returns the expected average visit time including slew """
         return (_estAvgSlewTimes[self.direction] +
                 config.WFDExpTime +
                 config.visitOverheadTime)
 
-    def _getTonightsDD(self):
-        """ Decides which DD field to observe for tonight
-
-        Saves the result in self.DDVisit. If no suitable DD field is
-        found for the night, sets self.DDVisit to None
-        """
+    def _getTonightsDDF(self):
+        # TODO probably no longer needed
+        """ Decides which DD field to observe for tonight """
 
         nightStart = sky.nightStart(config.surveyStartTime, self.nightNum)
         nightEnd = sky.nightEnd(config.surveyStartTime, self.nightNum)
@@ -368,17 +441,17 @@ class NightScheduler:
 
         # loop through all DD fields to see which one we can observe tonight
 
-        tonightsDD = []
+        visibleDDFs = []
 
         r = []
     
-        for dd in self.DD:
-            ra = dd.ra
-            dec = dd.dec
-            dd.currentSequence = dd.last_sequence + 1
-            if dd.currentSequence >= dd.nseq:
-                dd.currentSequence = 0
-            exptime = dd.sequences[dd.currentSequence].totExpTime
+        for ddf in self.DDFs:
+            ra = ddf.ra
+            dec = ddf.dec
+            ddf.currentSequence = ddf.last_sequence + 1
+            if ddf.currentSequence >= ddf.nseq:
+                ddf.currentSequence = 0
+            exptime = ddf.sequences[ddf.currentSequence].totExpTime
 
             raBuffer = exptime / (24*3600) * 2*np.pi
             DDDirection = utils.directionOfDec(dec)
@@ -402,44 +475,44 @@ class NightScheduler:
             # do not take into account fields that were observed
             # recently (2 days ago)
 
-            if dd.prevNight == -1 or self.nightNum - dd.prevNight > 2:
+            if ddf.prevNight == -1 or self.nightNum - ddf.prevNight > 2:
                 th_min, th_max, ha, time_obs = \
                         utils.getTimeObs(ra, dec, exptime, self.telescope,
                                          nightStart, nightEnd)
-                dd.time_obs = time_obs
-                dd.ha = ha
-                tonightsDD.append(dd)
+                ddf.time_obs = time_obs
+                ddf.ha = ha
+                visibleDDFs.append(ddf)
 
-        if len(tonightsDD) > 0:
+        if len(visibleDDFs) > 0:
             # among the selected, if there are fields not observed (yet) ie
-            # last_night=-1 : should be priority
+            # prevNight = -1 : should be priority
             list_priority=[]
-            for dd in tonightsDD:
-                #print('selected',dd)
-                if dd.last_night == -1:
-                    list_priority.append(dd)
+            for ddf in visibleDDFs:
+                #print('selected',ddf)
+                if ddf.prevNight == -1:
+                    list_priority.append(ddf)
 
             if len(list_priority) > 0:
-                tonightsDD = list_priority
+                visibleDDFs = list_priority
 
-            if len(tonightsDD) > 1 :
+            if len(visibleDDFs) > 1 :
                 r = []
-                for i, dd in enumerate(tonightsDD):
-                    r.append((i, dd.last_night, dd.ha))
-                tab = np.rec.fromrecords(r, names=['index','last_night','ha'])
+                for i, ddf in enumerate(visibleDDFs):
+                    r.append((i, ddf.prevNight, ddf.ha))
+                tab = np.rec.fromrecords(r, names=['index', 'prevNight', 'ha'])
                 """
-                idv = tab['last_night'] == np.min(tab['last_night'])
+                idv = tab['prevNight'] == np.min(tab['prevNight'])
                 sel_visit=tab[idv]
                 if len(sel_visit) > 1:
                 """
                 min_ha = np.argmin(tab['ha'])
-                return tonightsDD[np.asscalar(tab[min_ha]['index'])]
+                return visibleDDFs[np.asscalar(tab[min_ha]['index'])]
                 """
                 else:
-                    return tonightsDD[np.asscalar(sel_visit['index'])]
+                    return visibleDDFs[np.asscalar(sel_visit['index'])]
                 """
             else:
-                return tonightsDD[0]
+                return visibleDDFs[0]
         else:
             return None
 
@@ -808,6 +881,8 @@ class NightScheduler:
             # this is how long it would take us to complete the next
             # Southern scan
             cumTime += 2 * numNewVisits * avgVisitTime
+            if config.useDD:
+                cumTime += config.DDTimePerNight / nSScans * 2
             paddedTime = cumTime + 0.1 * numNewVisits * avgVisitTime
 
             # add an East scan if we've run out of time
@@ -830,10 +905,10 @@ class NightScheduler:
             """
             # add to cumTime if we know we'll schedule the DD visit after
             # this revisit group
-            if (self.DDVisit is not None and
+            if (self.tonightsDDF is not None and
                     self._isDDVisitInRevisitGroup(SRevisitGroup)):
                 # TODO this ignores the slew time to/from the DD field
-                cumTime += self.DDVisit['totExpTime']
+                cumTime += self.tonightsDDF['totExpTime']
             """
             revisitGroups.append(SRevisitGroup)
 
